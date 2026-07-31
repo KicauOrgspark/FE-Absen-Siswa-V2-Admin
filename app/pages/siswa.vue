@@ -29,6 +29,8 @@ const resetTargetId = ref('')
 const newPasswordInput = ref('password123')
 const resetSuccessMessage = ref('')
 
+const deleteErrorMessage = ref('')
+
 const currentPage = ref(1)
 const itemsPerPage = 12
 
@@ -57,8 +59,7 @@ const filteredStudents = computed(() => {
   })
 })
 
-// Reset to page 1 whenever any filter changes
-watch([searchQuery, selectedGrade, selectedClass, selectedStatus], () => {
+const fetchWithFilters = () => {
   currentPage.value = 1
   fetchUsers({
     role: 'siswa',
@@ -66,7 +67,10 @@ watch([searchQuery, selectedGrade, selectedClass, selectedStatus], () => {
     search: searchQuery.value || undefined,
     status: selectedStatus.value || undefined
   })
-})
+}
+
+// Reset to page 1 whenever any filter changes
+watch([searchQuery, selectedGrade, selectedClass, selectedStatus], fetchWithFilters)
 
 const paginatedStudents = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage
@@ -74,6 +78,13 @@ const paginatedStudents = computed(() => {
 })
 
 const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage) || 1)
+
+// Kalau halaman terakhir kosong setelah delete, mundur ke halaman yang valid
+watch(totalPages, (tp) => {
+  if (currentPage.value > tp) {
+    currentPage.value = tp
+  }
+})
 
 const resetAllFilters = () => {
   searchQuery.value = ''
@@ -108,8 +119,19 @@ const handleDelete = (id: string, name: string) => {
   isDeleteDialogOpen.value = true
 }
 
-const confirmDelete = () => {
-  deleteStudent(deleteTargetId.value)
+const confirmDelete = async () => {
+  deleteErrorMessage.value = ''
+  const res = await deleteStudent(deleteTargetId.value)
+  if (res.error) {
+    deleteErrorMessage.value = res.error.message || 'Gagal menghapus siswa. Coba lagi.'
+  } else {
+    fetchUsers({
+      role: 'siswa',
+      class_group: selectedClass.value || undefined,
+      search: searchQuery.value || undefined,
+      status: selectedStatus.value || undefined
+    })
+  }
   isDeleteDialogOpen.value = false
   deleteTargetId.value = ''
   deleteTargetName.value = ''
@@ -162,6 +184,21 @@ const handleResetPasswordSubmit = async () => {
           Tambah Siswa
         </button>
       </div>
+    </div>
+
+    <!-- Delete Error Alert -->
+    <div
+      v-if="deleteErrorMessage"
+      class="p-3.5 rounded-xl bg-rose-50 text-rose-700 font-medium text-xs sm:text-sm flex items-start gap-2.5 border border-rose-200"
+    >
+      <span class="material-symbols-outlined text-[20px] shrink-0 text-rose-600 mt-0.5">error</span>
+      <span class="leading-snug flex-1">{{ deleteErrorMessage }}</span>
+      <button
+        class="shrink-0 text-rose-500 hover:text-rose-700"
+        @click="deleteErrorMessage = ''"
+      >
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
     </div>
 
     <!-- Table Container -->

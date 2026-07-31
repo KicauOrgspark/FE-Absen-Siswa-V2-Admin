@@ -71,6 +71,10 @@ export const useApi = () => {
       headers['Content-Type'] = 'application/json'
     }
 
+    if (import.meta.client && options.method && options.method !== 'GET') {
+      console.log(`[useApi] ${options.method} ${endpoint} | token terkirim: ${token ? 'YA (' + token.length + ' chars)' : 'TIDAK (kosong)'} | cookie: ${tokenCookie.value ? 'ada' : 'kosong'} | localStorage: ${localStorage.getItem('token') ? 'ada' : 'kosong'}`)
+    }
+
     try {
       const res = await $fetch<T>(url, {
         method: options.method || 'GET',
@@ -91,9 +95,18 @@ export const useApi = () => {
       const status = errorObj?.response?.status || errorObj?.status || errorObj?.statusCode || 500
       const errMsg = errorObj?.data?.error || errorObj?.data?.message || errorObj?.response?._data?.error || errorObj?.response?._data?.message || errorObj?.message || ''
 
-      const isAuthError = status === 401 || status === 403 || String(errMsg).toLowerCase().includes('authorization') || String(errMsg).toLowerCase().includes('unauthorized')
+      // 204 No Content (e.g. successful DELETE without body) is a success
+      if (status === 204) {
+        return { data: null, error: null, status: 204 }
+      }
 
-      // On 401/403 or missing authorization header, clear auth and redirect to login
+      // Only treat as an auth error when the request actually carried a token
+      // (token exists but is invalid/expired). If no token was attached, the
+      // request simply had no auth - don't wipe the session for that.
+      const hadToken = !!getToken()
+      const isAuthError = hadToken && (status === 401 || status === 403)
+
+      // On invalid/expired token, clear auth and redirect to login
       if (isAuthError && import.meta.client) {
         tokenCookie.value = null
         localStorage.removeItem('token')

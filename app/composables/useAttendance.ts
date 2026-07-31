@@ -210,7 +210,7 @@ export const useAttendance = () => {
         grade: String(item.angkatan || item.grade || getGradeFromClass(cls)),
         time: String(item.time || item.created_at || '07:00'),
         status: normalizeStatus(String(item.attendance_status || item.presensi_status || 'Hadir')),
-        activeStatus: normalizeActiveStatus(item.status ?? item.active_status ?? item.user_status ?? item.status_keaktifan),
+        activeStatus: normalizeActiveStatus(item.active_status ?? item.status_keaktifan),
         alpaCount: Number(item.alpa_count || item.total_alfa || 0),
         avatarInitials: getInitials(String(item.full_name || item.name || ''))
       }
@@ -280,7 +280,6 @@ export const useAttendance = () => {
     isFetching.value = false
 
     students.value = list.map((u: Record<string, unknown>) => {
-      console.log('[DEBUG fetchUsers] raw user:', u.full_name, '| status:', u.status, '| active_status:', u.active_status)
       const cls = String(u.class_group || u.class || 'X DKV-1')
       return {
         id: String(u.id),
@@ -296,7 +295,7 @@ export const useAttendance = () => {
         time: String(u.created_at || '-'),
         status: normalizeStatus(String(u.attendance_status || u.presensi_status || 'Hadir')),
         role: String(u.role || 'siswa'),
-        activeStatus: normalizeActiveStatus(u.status ?? u.active_status ?? u.user_status ?? u.status_keaktifan),
+        activeStatus: normalizeActiveStatus(u.status ?? u.status_keaktifan),
         alpaCount: Number(u.alpa_count || 0),
         avatarInitials: getInitials(String(u.full_name || u.name || ''))
       }
@@ -349,15 +348,31 @@ export const useAttendance = () => {
   }
 
   const deleteStudent = async (id: string) => {
-    const { status } = await fetchApi(`/api/v1/users/${id}`, {
+    let { status, error } = await fetchApi(`/api/v1/users/${id}`, {
       method: 'DELETE'
     })
 
-    if (status === 200) {
-      fetchUsers()
-    } else {
-      students.value = students.value.filter(s => s.id !== id)
+    const isMissingAuth = status === 401 && String(error?.message || '').toLowerCase().includes('missing authorization header')
+
+    // Token ada di browser tapi header tidak ikut terkirim - retry sekali
+    if (isMissingAuth && import.meta.client && localStorage.getItem('token')) {
+      console.warn('[deleteStudent] Header auth tidak terkirim, retry...')
+      const retry = await fetchApi(`/api/v1/users/${id}`, {
+        method: 'DELETE'
+      })
+      status = retry.status
+      error = retry.error
     }
+
+    const isSuccess = !error || (status >= 200 && status < 300)
+
+    if (isSuccess) {
+      students.value = students.value.filter(s => s.id !== id)
+      await fetchUsers()
+    } else {
+      console.warn('[deleteStudent] Gagal menghapus user:', error?.message || status)
+    }
+    return { status, error }
   }
 
   const resetStudentPassword = async (id: string, newPassword: string) => {
