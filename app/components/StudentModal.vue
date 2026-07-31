@@ -92,13 +92,13 @@ const handleSubmit = () => {
     emit('update', props.editStudentData.id, payload)
   } else {
     if (
-      !form.name.trim() ||
-      !form.nisn.trim() ||
-      !form.username.trim() ||
-      !form.password.trim() ||
-      !form.email.trim() ||
-      !form.parentPhone.trim() ||
-      !form.class.trim()
+      !form.name.trim()
+      || !form.nisn.trim()
+      || !form.username.trim()
+      || !form.password.trim()
+      || !form.email.trim()
+      || !form.parentPhone.trim()
+      || !form.class.trim()
     ) {
       return
     }
@@ -173,11 +173,17 @@ const handleSubmit = () => {
               </div>
 
               <!-- Drawer Form Content -->
-              <form class="flex-1 flex flex-col justify-between overflow-hidden" @submit.prevent="handleSubmit">
+              <form
+                class="flex-1 flex flex-col justify-between overflow-hidden"
+                @submit.prevent="handleSubmit"
+              >
                 <div class="p-6 space-y-5 overflow-y-auto flex-1">
                   <div>
                     <label class="block font-label text-label-sm text-secondary mb-1">
-                      Nama Lengkap Siswa <span v-if="!editStudentData" class="text-rose-500">*</span>
+                      Nama Lengkap Siswa <span
+                        v-if="!editStudentData"
+                        class="text-rose-500"
+                      >*</span>
                     </label>
                     <input
                       v-model="form.name"
@@ -191,7 +197,10 @@ const handleSubmit = () => {
                   <div class="grid grid-cols-2 gap-4">
                     <div>
                       <label class="block font-label text-label-sm text-secondary mb-1">
-                        NISN / ID Siswa <span v-if="!editStudentData" class="text-rose-500">*</span>
+                        NISN / ID Siswa <span
+                          v-if="!editStudentData"
+                          class="text-rose-500"
+                        >*</span>
                       </label>
                       <input
                         v-model="form.nisn"
@@ -203,17 +212,30 @@ const handleSubmit = () => {
                     </div>
                     <div>
                       <label class="block font-label text-label-sm text-secondary mb-1">
-                        Jurusan <span v-if="!editStudentData" class="text-rose-500">*</span>
+                        Jurusan <span
+                          v-if="!editStudentData"
+                          class="text-rose-500"
+                        >*</span>
                       </label>
                       <select
                         v-model="form.major"
                         class="w-full px-4 py-2.5 bg-surface-white border border-surface-container-highest rounded-lg text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                       >
-                        <option value="DKV">DKV</option>
-                        <option value="RPL">RPL</option>
-                        <option value="TKJ">TKJ</option>
-                        <option value="LPB">LPB</option>
-                        <option value="TOI">TOI</option>
+                        <option value="DKV">
+                          DKV
+                        </option>
+                        <option value="RPL">
+                          RPL
+                        </option>
+                        <option value="TKJ">
+                          TKJ
+                        </option>
+                        <option value="LPB">
+                          LPB
+                        </option>
+                        <option value="TOI">
+                          TOI
+                        </option>
                       </select>
                     </div>
                   </div>
@@ -226,7 +248,10 @@ const handleSubmit = () => {
                     <div class="grid grid-cols-2 gap-4">
                       <div>
                         <label class="block font-label text-[11px] text-secondary mb-1">
-                          Username <span v-if="!editStudentData" class="text-rose-500">*</span>
+                          Username <span
+                            v-if="!editStudentData"
+                            class="text-rose-500"
+                          >*</span>
                         </label>
                         <input
                           v-model="form.username"
@@ -238,7 +263,10 @@ const handleSubmit = () => {
                       </div>
                       <div>
                         <label class="block font-label text-[11px] text-secondary mb-1">
-                          Password <span v-if="!editStudentData" class="text-rose-500">*</span>
+                          Password <span
+                            v-if="!editStudentData"
+                            class="text-rose-500"
+                          >*</span>
                         </label>
                         <div class="relative">
                           <input
@@ -264,7 +292,10 @@ const handleSubmit = () => {
 
                   <div>
                     <label class="block font-label text-label-sm text-secondary mb-1">
-                      Email Siswa <span v-if="!editStudentData" class="text-rose-500">*</span>
+                      Email Siswa <span
+                        v-if="!editStudentData"
+                        class="text-rose-500"
+                      >*</span>
                     </label>
                     <input
                       v-model="form.email"
@@ -277,7 +308,10 @@ const handleSubmit = () => {
 
                   <div>
                     <label class="block font-label text-label-sm text-secondary mb-1">
-                      No. Telepon Orang Tua <span v-if="!editStudentData" class="text-rose-500">*</span>
+                      No. Telepon Orang Tua <span
+                        v-if="!editStudentData"
+                        class="text-rose-500"
+                      >*</span>
                     </label>
                     <input
                       v-model="form.parentPhone"
@@ -291,7 +325,10 @@ const handleSubmit = () => {
                   <div class="grid grid-cols-2 gap-4">
                     <div>
                       <label class="block font-label text-label-sm text-secondary mb-1">
-                        Kelas <span v-if="!editStudentData" class="text-rose-500">*</span>
+                        Kelas <span
+                          v-if="!editStudentData"
+                          class="text-rose-500"
+                        >*</span>
                       </label>
                       <input
                         v-model="form.class"
@@ -307,9 +344,15 @@ const handleSubmit = () => {
                         v-model="form.activeStatus"
                         class="w-full px-4 py-2.5 bg-surface-white border border-surface-container-highest rounded-lg text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                       >
-                        <option value="AKTIF">AKTIF</option>
-                        <option value="PKL">PKL</option>
-                        <option value="NON AKTIF">NON AKTIF</option>
+                        <option value="AKTIF">
+                          AKTIF
+                        </option>
+                        <option value="PKL">
+                          PKL
+                        </option>
+                        <option value="NON AKTIF">
+                          NON AKTIF
+                        </option>
                       </select>
                     </div>
                   </div>

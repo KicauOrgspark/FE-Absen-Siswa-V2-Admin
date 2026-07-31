@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const route = useRoute()
+const { logout } = useAuth()
 
 const isCollapsed = ref(false)
 
@@ -26,11 +27,21 @@ const isActive = (path: string) => {
     <!-- Brand Header -->
     <div class="px-gutter-grid mb-stack-lg flex items-center gap-3">
       <div class="bg-primary text-white p-2 rounded-lg flex-shrink-0 flex items-center justify-center">
-        <span class="material-symbols-outlined text-[24px]" data-fill="1">shield</span>
+        <span
+          class="material-symbols-outlined text-[24px]"
+          data-fill="1"
+        >shield</span>
       </div>
-      <div v-if="!isCollapsed" class="overflow-hidden">
-        <h1 class="font-title text-title-lg font-bold text-primary leading-tight truncate">Smart-presence</h1>
-        <p class="font-label text-label-sm text-secondary uppercase tracking-widest text-[10px] truncate">Administrative Panel</p>
+      <div
+        v-if="!isCollapsed"
+        class="overflow-hidden"
+      >
+        <h1 class="font-title text-title-lg font-bold text-primary leading-tight truncate">
+          Smart-presence
+        </h1>
+        <p class="font-label text-label-sm text-secondary uppercase tracking-widest text-[10px] truncate">
+          Administrative Panel
+        </p>
       </div>
       <button
         class="ml-auto text-secondary hover:text-primary transition-colors p-1 rounded hover:bg-surface-container-low"
@@ -56,15 +67,36 @@ const isActive = (path: string) => {
             : 'text-secondary hover:text-primary hover:bg-surface-container-low'
         ]"
       >
-        <span class="material-symbols-outlined text-[20px]" :data-fill="isActive(item.path) ? '1' : '0'">
+        <span
+          class="material-symbols-outlined text-[20px]"
+          :data-fill="isActive(item.path) ? '1' : '0'"
+        >
           {{ item.icon }}
         </span>
-        <span v-if="!isCollapsed" class="truncate">{{ item.label }}</span>
+        <span
+          v-if="!isCollapsed"
+          class="truncate"
+        >{{ item.label }}</span>
       </NuxtLink>
+
+      <button
+        class="flex items-center gap-3 px-4 py-3 mt-auto rounded-md font-label text-label-lg text-rose-600 hover:bg-rose-50 transition-colors duration-200 font-bold"
+        :title="isCollapsed ? 'Keluar / Logout' : ''"
+        @click="logout"
+      >
+        <span class="material-symbols-outlined text-[20px]">logout</span>
+        <span
+          v-if="!isCollapsed"
+          class="truncate"
+        >Keluar</span>
+      </button>
     </nav>
 
     <!-- Footer Credits -->
-    <div v-if="!isCollapsed" class="px-gutter-grid mt-auto pt-6 border-t border-surface-container-highest text-center">
+    <div
+      v-if="!isCollapsed"
+      class="px-gutter-grid mt-auto pt-6 border-t border-surface-container-highest text-center"
+    >
       <p class="font-label text-[10px] text-muted-text leading-relaxed">
         © 2026 SMK Plus Pelita Nusantara.<br>
         All rights reserved.<br>

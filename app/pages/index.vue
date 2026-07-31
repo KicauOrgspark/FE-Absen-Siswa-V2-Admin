@@ -1,5 +1,14 @@
 <script setup lang="ts">
-const { students, stats, updateStudentStatus } = useAttendance()
+const {
+  students,
+  stats,
+  availableClasses,
+  fetchDashboardStats,
+  fetchDashboardTrend,
+  fetchAttendanceStudents,
+  fetchClassesList,
+  updateStudentStatus
+} = useAttendance()
 
 const searchQuery = ref('')
 const selectedGrade = ref('Semua Angkatan')
@@ -10,10 +19,27 @@ const formattedDate = computed(() => {
   return new Date().toLocaleDateString('id-ID', options)
 })
 
+onMounted(async () => {
+  await Promise.all([
+    fetchDashboardStats(),
+    fetchDashboardTrend(),
+    fetchClassesList(),
+    fetchAttendanceStudents()
+  ])
+})
+
+watch([selectedGrade, selectedClass], () => {
+  fetchAttendanceStudents({
+    angkatan: selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined,
+    class_group: selectedClass.value !== 'Semua Kelas' ? selectedClass.value : undefined
+  })
+})
+
 const filteredStudents = computed(() => {
   return students.value.filter((student) => {
-    const matchesSearch = student.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                          student.nisn.includes(searchQuery.value)
+    const matchesSearch = !searchQuery.value
+      || student.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+      || student.nisn.includes(searchQuery.value)
     const matchesGrade = selectedGrade.value === 'Semua Angkatan' || student.grade === selectedGrade.value
     const matchesClass = selectedClass.value === 'Semua Kelas' || student.class === selectedClass.value
     return matchesSearch && matchesGrade && matchesClass
@@ -97,10 +123,18 @@ const filteredStudents = computed(() => {
               v-model="selectedGrade"
               class="appearance-none pl-4 pr-10 py-2 border border-surface-container-highest rounded text-body-md text-deep-black bg-surface-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             >
-              <option value="Semua Angkatan">Semua Angkatan</option>
-              <option value="X">Kelas X</option>
-              <option value="XI">Kelas XI</option>
-              <option value="XII">Kelas XII</option>
+              <option value="Semua Angkatan">
+                Semua Angkatan
+              </option>
+              <option value="X">
+                Kelas X
+              </option>
+              <option value="XI">
+                Kelas XI
+              </option>
+              <option value="XII">
+                Kelas XII
+              </option>
             </select>
             <span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm pointer-events-none">expand_more</span>
           </div>
@@ -109,11 +143,28 @@ const filteredStudents = computed(() => {
               v-model="selectedClass"
               class="appearance-none pl-4 pr-10 py-2 border border-surface-container-highest rounded text-body-md text-deep-black bg-surface-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             >
-              <option value="Semua Kelas">Semua Kelas</option>
-              <option value="X DKV-1">X DKV-1</option>
-              <option value="X RPL 1">X RPL 1</option>
-              <option value="XI TKJ 2">XI TKJ 2</option>
-              <option value="XII TOI 1">XII TOI 1</option>
+              <option value="Semua Kelas">
+                Semua Kelas
+              </option>
+              <option
+                v-for="cls in availableClasses"
+                :key="cls.id || cls.name || cls"
+                :value="cls.name || cls.class_name || cls"
+              >
+                {{ cls.name || cls.class_name || cls }}
+              </option>
+              <option value="X DKV-1">
+                X DKV-1
+              </option>
+              <option value="X RPL 1">
+                X RPL 1
+              </option>
+              <option value="XI TKJ 2">
+                XI TKJ 2
+              </option>
+              <option value="XII TOI 1">
+                XII TOI 1
+              </option>
             </select>
             <span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm pointer-events-none">expand_more</span>
           </div>
@@ -125,13 +176,30 @@ const filteredStudents = computed(() => {
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-surface-container-highest text-secondary font-label text-[11px] uppercase tracking-wider">
-              <th class="p-4 w-12"><input type="checkbox" class="rounded border-surface-container-highest text-primary focus:ring-primary"></th>
-              <th class="p-4 font-bold">NISN</th>
-              <th class="p-4 font-bold">Nama Siswa</th>
-              <th class="p-4 font-bold">Kelas</th>
-              <th class="p-4 font-bold">Waktu</th>
-              <th class="p-4 font-bold">Status Presensi</th>
-              <th class="p-4 font-bold text-center">Aksi Cepat</th>
+              <th class="p-4 w-12">
+                <input
+                  type="checkbox"
+                  class="rounded border-surface-container-highest text-primary focus:ring-primary"
+                >
+              </th>
+              <th class="p-4 font-bold">
+                NISN
+              </th>
+              <th class="p-4 font-bold">
+                Nama Siswa
+              </th>
+              <th class="p-4 font-bold">
+                Kelas
+              </th>
+              <th class="p-4 font-bold">
+                Waktu
+              </th>
+              <th class="p-4 font-bold">
+                Status Presensi
+              </th>
+              <th class="p-4 font-bold text-center">
+                Aksi Cepat
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-surface-container-highest text-body-md text-deep-black">
@@ -140,8 +208,15 @@ const filteredStudents = computed(() => {
               :key="student.id"
               class="hover:bg-surface-container-low transition-colors"
             >
-              <td class="p-4"><input type="checkbox" class="rounded border-surface-container-highest text-primary focus:ring-primary"></td>
-              <td class="p-4 text-secondary font-mono text-xs">{{ student.nisn }}</td>
+              <td class="p-4">
+                <input
+                  type="checkbox"
+                  class="rounded border-surface-container-highest text-primary focus:ring-primary"
+                >
+              </td>
+              <td class="p-4 text-secondary font-mono text-xs">
+                {{ student.nisn }}
+              </td>
               <td class="p-4">
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-deep-black font-bold text-xs">
@@ -150,8 +225,12 @@ const filteredStudents = computed(() => {
                   <span class="font-bold">{{ student.name }}</span>
                 </div>
               </td>
-              <td class="p-4">{{ student.class }}</td>
-              <td class="p-4 text-secondary">{{ student.time || '-' }}</td>
+              <td class="p-4">
+                {{ student.class }}
+              </td>
+              <td class="p-4 text-secondary">
+                {{ student.time || '-' }}
+              </td>
               <td class="p-4">
                 <StatusBadge :status="student.status" />
               </td>
@@ -163,7 +242,10 @@ const filteredStudents = computed(() => {
               </td>
             </tr>
             <tr v-if="!filteredStudents.length">
-              <td colspan="7" class="p-8 text-center text-secondary">
+              <td
+                colspan="7"
+                class="p-8 text-center text-secondary"
+              >
                 Tidak ada data siswa yang cocok dengan kriteria pencarian.
               </td>
             </tr>

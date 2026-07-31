@@ -1,11 +1,16 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   currentStatus: string
 }>()
 
 const emit = defineEmits<{
   (e: 'updateStatus', status: 'Hadir' | 'Izin' | 'Sakit' | 'Alpa'): void
 }>()
+
+const isHadir = computed(() => props.currentStatus?.toLowerCase() === 'hadir')
+const isIzin = computed(() => props.currentStatus?.toLowerCase() === 'izin')
+const isSakit = computed(() => props.currentStatus?.toLowerCase() === 'sakit')
+const isAlpa = computed(() => props.currentStatus?.toLowerCase() === 'alpa' || props.currentStatus?.toLowerCase() === 'alfa')
 </script>
 
 <template>
@@ -14,7 +19,7 @@ const emit = defineEmits<{
     <button
       class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
-        currentStatus === 'Hadir'
+        isHadir
           ? 'bg-[#00875a] text-white shadow-sm'
           : 'bg-surface-container-highest hover:bg-[#00875a]/20 text-secondary hover:text-[#00875a]'
       ]"
@@ -28,7 +33,7 @@ const emit = defineEmits<{
     <button
       class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
-        currentStatus === 'Izin'
+        isIzin
           ? 'bg-amber-600 text-white shadow-sm'
           : 'bg-surface-container-highest hover:bg-amber-600/20 text-secondary hover:text-amber-700'
       ]"
@@ -42,7 +47,7 @@ const emit = defineEmits<{
     <button
       class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
-        currentStatus === 'Sakit'
+        isSakit
           ? 'bg-secondary text-white shadow-sm'
           : 'bg-surface-container-highest hover:bg-secondary/20 text-secondary hover:text-deep-black'
       ]"
@@ -56,7 +61,7 @@ const emit = defineEmits<{
     <button
       class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
-        currentStatus === 'Alpa'
+        isAlpa
           ? 'bg-[#de350b] text-white shadow-sm'
           : 'bg-surface-container-highest hover:bg-[#de350b]/20 text-secondary hover:text-[#de350b]'
       ]"

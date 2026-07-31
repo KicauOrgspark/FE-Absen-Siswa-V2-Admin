@@ -1,5 +1,6 @@
 <script setup lang="ts">
-const { students, topAbsents } = useAttendance()
+const { topAbsents } = useAttendance()
+const { fetchApi, getExportUrl } = useApi()
 
 const fromDate = ref('2026-07-01')
 const toDate = ref('2026-07-30')
@@ -7,38 +8,111 @@ const selectedGrade = ref('Grade X')
 const selectedMajor = ref('All Majors')
 const searchQuery = ref('')
 
+const serverTopAlfaList = ref<Record<string, unknown>[]>([])
+const monthlyRecapData = ref<Record<string, unknown> | null>(null)
+const attendanceLogsList = ref<Record<string, unknown>[]>([])
+const isExporting = ref(false)
+
+const fetchTopAlfa = async () => {
+  const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/top-alfa')
+  const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
+  if (list) {
+    serverTopAlfaList.value = list as Record<string, unknown>[]
+  }
+}
+
+const fetchMonthlyRecap = async () => {
+  const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/monthly-recap', {
+    params: { year: '2025/2026' }
+  })
+  if (data) {
+    monthlyRecapData.value = data
+  }
+}
+
+const fetchAttendanceLogs = async () => {
+  const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
+    params: {
+      page: 1,
+      limit: 20,
+      start_date: fromDate.value,
+      end_date: toDate.value,
+      class_group: selectedGrade.value !== 'Grade X' ? selectedGrade.value : undefined,
+      search: searchQuery.value || undefined
+    }
+  })
+  const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
+  if (list) {
+    attendanceLogsList.value = list as Record<string, unknown>[]
+  }
+}
+
+onMounted(() => {
+  fetchTopAlfa()
+  fetchMonthlyRecap()
+  fetchAttendanceLogs()
+})
+
+watch([fromDate, toDate, selectedGrade, selectedMajor], () => {
+  fetchAttendanceLogs()
+})
+
+const displayTopAbsents = computed(() => {
+  if (serverTopAlfaList.value.length) {
+    return serverTopAlfaList.value.map((item, idx) => ({
+      id: String(item.id || item.user_id || idx),
+      name: String(item.full_name || item.name || 'Siswa'),
+      nisn: String(item.nisn || '-'),
+      class: String(item.class_group || item.class || 'X RPL 1'),
+      major: String(item.jurusan || 'RPL'),
+      alpaCount: Number(item.total_alfa || item.alpa_count || item.alfa_count || 0),
+      avatarInitials: String(item.full_name || item.name || 'S').substring(0, 2).toUpperCase(),
+      email: String(item.email || `${String(item.full_name || 'student').toLowerCase().replace(/\s+/g, '.')}@student.pelitanusantara.sch.id`),
+      activeStatus: String(item.active_status || 'AKTIF')
+    }))
+  }
+  return topAbsents.value
+})
+
 const topAbsentStudent = computed(() => {
-  const top = topAbsents.value[0]
-  if (!top) return null
+  const list = displayTopAbsents.value
+  if (!list.length) return null
+  const top = list[0]
   return {
     ...top,
     nisn: top.nisn || 'TRB-1030',
     email: top.email || `${top.name.toLowerCase().replace(/\s+/g, '.')}@student.pelitanusantara.sch.id`,
-    parentName: top.parentName || 'Bpk. Donkey Mendoza',
-    parentPhone: top.parentPhone || '081234567890',
+    parentName: 'Orang Tua Siswa',
+    parentPhone: '081234567890',
     activeStatus: top.activeStatus || 'AKTIF'
   }
 })
 
-const exportToExcel = () => {
-  const headers = ['Student Name', 'NISN', 'Class', 'Time', 'Status', 'Alpa Count']
-  const rows = students.value.map(s => [
-    `"${s.name}"`,
-    `"${s.nisn}"`,
-    `"${s.class}"`,
-    `"${s.time || '-'}"`,
-    `"${s.status}"`,
-    s.alpaCount
-  ])
+const exportToExcel = async () => {
+  isExporting.value = true
+  const kelas = selectedGrade.value !== 'Grade X' ? selectedGrade.value : 'X-RPL-1'
+  const jurusan = selectedMajor.value !== 'All Majors' ? selectedMajor.value : 'RPL'
 
-  const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n')
-  const encodedUri = encodeURI(csvContent)
-  const link = document.createElement('a')
-  link.setAttribute('href', encodedUri)
-  link.setAttribute('download', `Laporan_Presensi_${fromDate.value}_sd_${toDate.value}.csv`)
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  const exportUrl = getExportUrl('/api/v1/export/attendance', {
+    kelas,
+    jurusan,
+    start_date: fromDate.value,
+    end_date: toDate.value
+  })
+
+  try {
+    const link = document.createElement('a')
+    link.href = exportUrl
+    link.target = '_blank'
+    link.setAttribute('download', `Laporan_Presensi_${fromDate.value}_sd_${toDate.value}.xlsx`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  } catch (err) {
+    console.error('Export download error:', err)
+  } finally {
+    isExporting.value = false
+  }
 }
 </script>
 
@@ -128,9 +202,15 @@ const exportToExcel = () => {
               v-model="selectedGrade"
               class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-[120px] cursor-pointer"
             >
-              <option value="Grade X">Grade X</option>
-              <option value="Grade XI">Grade XI</option>
-              <option value="Grade XII">Grade XII</option>
+              <option value="Grade X">
+                Grade X
+              </option>
+              <option value="Grade XI">
+                Grade XI
+              </option>
+              <option value="Grade XII">
+                Grade XII
+              </option>
             </select>
             <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
           </div>
@@ -141,11 +221,21 @@ const exportToExcel = () => {
               v-model="selectedMajor"
               class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-[160px] cursor-pointer"
             >
-              <option value="All Majors">All Majors</option>
-              <option value="DKV">DKV</option>
-              <option value="RPL">RPL</option>
-              <option value="TKJ">TKJ</option>
-              <option value="TOI">TOI</option>
+              <option value="All Majors">
+                All Majors
+              </option>
+              <option value="DKV">
+                DKV
+              </option>
+              <option value="RPL">
+                RPL
+              </option>
+              <option value="TKJ">
+                TKJ
+              </option>
+              <option value="TOI">
+                TOI
+              </option>
             </select>
             <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
           </div>
@@ -153,11 +243,15 @@ const exportToExcel = () => {
           <!-- Export Actions -->
           <div class="flex items-center gap-stack-sm w-full md:w-auto ml-auto">
             <button
-              class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-primary text-white px-4 py-2 rounded-md font-label text-label-lg hover:bg-primary-container transition-colors duration-200 shadow-sm font-bold"
+              class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-primary text-white px-4 py-2 rounded-md font-label text-label-lg hover:bg-primary-container transition-colors duration-200 shadow-sm font-bold active:scale-95 disabled:opacity-50"
+              :disabled="isExporting"
               @click="exportToExcel"
             >
-              <span class="material-symbols-outlined text-[20px]">table</span>
-              Excel
+              <span
+                class="material-symbols-outlined text-[20px]"
+                :class="{ 'animate-spin': isExporting }"
+              >table</span>
+              {{ isExporting ? 'Exporting...' : 'Export Excel (BE)' }}
             </button>
           </div>
         </div>
@@ -174,15 +268,19 @@ const exportToExcel = () => {
         <div class="lg:col-span-2 bg-surface-white border border-surface-container-highest rounded-lg p-6 shadow-sm">
           <ul class="divide-y divide-surface-container-highest">
             <li
-              v-for="(student, index) in topAbsents"
+              v-for="(student, index) in displayTopAbsents"
               :key="student.id"
               class="py-3 flex justify-between items-center"
             >
               <div class="flex items-center gap-3">
                 <span class="font-bold text-secondary text-sm w-4">{{ index + 1 }}</span>
                 <div>
-                  <p class="font-bold text-deep-black text-sm">{{ student.name }}</p>
-                  <p class="text-xs text-secondary">{{ student.class }}</p>
+                  <p class="font-bold text-deep-black text-sm">
+                    {{ student.name }}
+                  </p>
+                  <p class="text-xs text-secondary">
+                    {{ student.class }}
+                  </p>
                 </div>
               </div>
               <span class="font-bold text-error bg-error-container px-2.5 py-1 rounded text-xs">
@@ -193,9 +291,12 @@ const exportToExcel = () => {
         </div>
 
         <!-- Featured Most Absent Student Detail Card -->
-        <div v-if="topAbsentStudent" class="lg:col-span-1 bg-surface-white border border-surface-container-highest rounded-xl p-6 flex flex-col shadow-sm relative overflow-hidden">
-          <div class="absolute top-0 left-0 w-full h-1.5 bg-error"></div>
-          
+        <div
+          v-if="topAbsentStudent"
+          class="lg:col-span-1 bg-surface-white border border-surface-container-highest rounded-xl p-6 flex flex-col shadow-sm relative overflow-hidden"
+        >
+          <div class="absolute top-0 left-0 w-full h-1.5 bg-error" />
+
           <!-- Card Header & Badge -->
           <div class="flex items-center justify-between mb-4">
             <span class="font-label text-xs font-bold text-error uppercase tracking-wider flex items-center gap-1">
@@ -244,14 +345,10 @@ const exportToExcel = () => {
               <span class="text-secondary font-medium flex items-center gap-1.5">
                 <span class="material-symbols-outlined text-sm text-primary">mail</span> Email Siswa
               </span>
-              <span class="font-medium text-deep-black truncate max-w-[160px]" :title="topAbsentStudent.email">{{ topAbsentStudent.email }}</span>
-            </div>
-
-            <div class="flex items-center justify-between p-2 rounded-lg bg-surface-container-low border border-surface-container-highest">
-              <span class="text-secondary font-medium flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-sm text-primary">call</span> No. Telepon Ortu
-              </span>
-              <span class="font-mono font-bold text-deep-black">{{ topAbsentStudent.parentPhone || '081234567890' }}</span>
+              <span
+                class="font-medium text-deep-black truncate max-w-[160px]"
+                :title="topAbsentStudent.email"
+              >{{ topAbsentStudent.email }}</span>
             </div>
           </div>
         </div>

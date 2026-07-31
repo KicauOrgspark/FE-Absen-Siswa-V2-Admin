@@ -4,17 +4,21 @@ const props = defineProps<{
   title?: string
   message?: string
   confirmText?: string
+  confirmLabel?: string
   cancelText?: string
   variant?: 'danger' | 'warning' | 'info'
+  confirmVariant?: 'danger' | 'warning' | 'info'
 }>()
 
 const emit = defineEmits<{
-  (e: 'confirm'): void
-  (e: 'cancel'): void
+  (e: 'confirm' | 'cancel'): void
 }>()
 
+const activeVariant = computed(() => props.variant || props.confirmVariant || 'danger')
+const activeConfirmText = computed(() => props.confirmText || props.confirmLabel || 'Konfirmasi')
+
 const variantConfig = computed(() => {
-  switch (props.variant) {
+  switch (activeVariant.value) {
     case 'warning':
       return {
         icon: 'warning',
@@ -80,8 +84,14 @@ const variantConfig = computed(() => {
 
             <div class="p-6 text-center">
               <!-- Icon -->
-              <div class="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4" :class="variantConfig.iconBg">
-                <span class="material-symbols-outlined text-3xl" :class="variantConfig.iconColor">
+              <div
+                class="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                :class="variantConfig.iconBg"
+              >
+                <span
+                  class="material-symbols-outlined text-3xl"
+                  :class="variantConfig.iconColor"
+                >
                   {{ variantConfig.icon }}
                 </span>
               </div>
@@ -113,7 +123,7 @@ const variantConfig = computed(() => {
                 @click="emit('confirm')"
               >
                 <span class="material-symbols-outlined text-lg">{{ variantConfig.icon }}</span>
-                {{ confirmText || 'Konfirmasi' }}
+                {{ activeConfirmText }}
               </button>
             </div>
           </div>

@@ -1,5 +1,14 @@
 <script setup lang="ts">
-const { students, stats, departmentStats, updateStudentStatus } = useAttendance()
+const {
+  students,
+  stats,
+  departmentStats,
+  availableClasses,
+  fetchDashboardStats,
+  fetchAttendanceStudents,
+  fetchClassesList,
+  updateStudentStatus
+} = useAttendance()
 
 const searchQuery = ref('')
 const selectedYear = ref('Semua')
@@ -23,9 +32,30 @@ const formattedDate = computed(() => {
   return new Date().toLocaleDateString('id-ID', options)
 })
 
+onMounted(async () => {
+  await Promise.all([
+    fetchDashboardStats(),
+    fetchClassesList(),
+    fetchAttendanceStudents()
+  ])
+})
+
+const applyFilters = () => {
+  fetchAttendanceStudents({
+    jurusan: selectedMajor.value !== 'Semua' ? selectedMajor.value : undefined,
+    class_group: selectedClass.value !== 'Semua' ? selectedClass.value : undefined,
+    status: selectedStatus.value !== 'Semua' ? selectedStatus.value : undefined
+  })
+}
+
+watch([selectedMajor, selectedClass, selectedStatus], () => {
+  currentPage.value = 1
+  applyFilters()
+})
+
 const filteredStudents = computed(() => {
   return students.value.filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || s.nisn.includes(searchQuery.value)
+    const matchesSearch = !searchQuery.value || s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || s.nisn.includes(searchQuery.value)
     const matchesMajor = selectedMajor.value === 'Semua' || s.major === selectedMajor.value
     const matchesClass = selectedClass.value === 'Semua' || s.class === selectedClass.value
     const matchesStatus = selectedStatus.value === 'Semua' || s.status === selectedStatus.value
@@ -47,6 +77,7 @@ const resetFilters = () => {
   selectedClass.value = 'Semua'
   selectedStatus.value = 'Semua'
   currentPage.value = 1
+  fetchAttendanceStudents()
 }
 </script>
 
@@ -110,7 +141,7 @@ const resetFilters = () => {
           <div
             v-if="dept.major === 'DKV'"
             class="absolute top-0 left-0 w-full h-1 bg-primary"
-          ></div>
+          />
           <div class="w-12 h-12 rounded-full bg-surface-container-low text-primary flex items-center justify-center mb-1">
             <span class="material-symbols-outlined">{{ majorIcons[dept.major] || 'school' }}</span>
           </div>
@@ -143,12 +174,24 @@ const resetFilters = () => {
             v-model="selectedMajor"
             class="w-full sm:w-32 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
           >
-            <option value="Semua">Semua</option>
-            <option value="DKV">DKV</option>
-            <option value="RPL">RPL</option>
-            <option value="TKJ">TKJ</option>
-            <option value="LPB">LPB</option>
-            <option value="TOI">TOI</option>
+            <option value="Semua">
+              Semua
+            </option>
+            <option value="DKV">
+              DKV
+            </option>
+            <option value="RPL">
+              RPL
+            </option>
+            <option value="TKJ">
+              TKJ
+            </option>
+            <option value="LPB">
+              LPB
+            </option>
+            <option value="TOI">
+              TOI
+            </option>
           </select>
         </div>
 
@@ -158,11 +201,28 @@ const resetFilters = () => {
             v-model="selectedClass"
             class="w-full sm:w-32 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
           >
-            <option value="Semua">Semua</option>
-            <option value="X DKV-1">X DKV-1</option>
-            <option value="X RPL 1">X RPL 1</option>
-            <option value="XI TKJ 2">XI TKJ 2</option>
-            <option value="XII TOI 1">XII TOI 1</option>
+            <option value="Semua">
+              Semua
+            </option>
+            <option
+              v-for="cls in availableClasses"
+              :key="cls.id || cls.name || cls"
+              :value="cls.name || cls.class_name || cls"
+            >
+              {{ cls.name || cls.class_name || cls }}
+            </option>
+            <option value="X DKV-1">
+              X DKV-1
+            </option>
+            <option value="X RPL 1">
+              X RPL 1
+            </option>
+            <option value="XI TKJ 2">
+              XI TKJ 2
+            </option>
+            <option value="XII TOI 1">
+              XII TOI 1
+            </option>
           </select>
         </div>
 
@@ -172,13 +232,27 @@ const resetFilters = () => {
             v-model="selectedStatus"
             class="w-full sm:w-36 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
           >
-            <option value="Semua">Semua</option>
-            <option value="Belum Absen">Belum Absen</option>
-            <option value="Hadir">Hadir</option>
-            <option value="Izin">Izin</option>
-            <option value="Sakit">Sakit</option>
-            <option value="PKL">PKL</option>
-            <option value="Alpa">Alpa</option>
+            <option value="Semua">
+              Semua
+            </option>
+            <option value="Belum Absen">
+              Belum Absen
+            </option>
+            <option value="Hadir">
+              Hadir
+            </option>
+            <option value="Izin">
+              Izin
+            </option>
+            <option value="Sakit">
+              Sakit
+            </option>
+            <option value="PKL">
+              PKL
+            </option>
+            <option value="Alpa">
+              Alpa
+            </option>
           </select>
         </div>
 
@@ -196,13 +270,27 @@ const resetFilters = () => {
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-background-cream text-secondary font-label text-label-sm uppercase tracking-wider border-b border-surface-container-highest">
-              <th class="p-4 font-semibold w-16 text-center">No</th>
-              <th class="p-4 font-semibold">Nama Siswa</th>
-              <th class="p-4 font-semibold">NISN</th>
-              <th class="p-4 font-semibold">Kelas</th>
-              <th class="p-4 font-semibold text-center">Waktu</th>
-              <th class="p-4 font-semibold text-center">Status Presensi</th>
-              <th class="p-4 font-semibold text-right">Aksi</th>
+              <th class="p-4 font-semibold w-16 text-center">
+                No
+              </th>
+              <th class="p-4 font-semibold">
+                Nama Siswa
+              </th>
+              <th class="p-4 font-semibold">
+                NISN
+              </th>
+              <th class="p-4 font-semibold">
+                Kelas
+              </th>
+              <th class="p-4 font-semibold text-center">
+                Waktu
+              </th>
+              <th class="p-4 font-semibold text-center">
+                Status Presensi
+              </th>
+              <th class="p-4 font-semibold text-right">
+                Aksi
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-surface-container-highest">
@@ -211,11 +299,21 @@ const resetFilters = () => {
               :key="student.id"
               class="hover:bg-surface-container-low/50 transition-colors"
             >
-              <td class="p-4 text-center text-secondary font-body">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
-              <td class="p-4 font-label text-label-lg text-on-surface font-bold">{{ student.name }}</td>
-              <td class="p-4 text-secondary font-mono text-sm">{{ student.nisn }}</td>
-              <td class="p-4 text-on-surface font-body">{{ student.class }}</td>
-              <td class="p-4 text-center text-secondary font-body">{{ student.time || '-' }}</td>
+              <td class="p-4 text-center text-secondary font-body">
+                {{ (currentPage - 1) * itemsPerPage + index + 1 }}
+              </td>
+              <td class="p-4 font-label text-label-lg text-on-surface font-bold">
+                {{ student.name }}
+              </td>
+              <td class="p-4 text-secondary font-mono text-sm">
+                {{ student.nisn }}
+              </td>
+              <td class="p-4 text-on-surface font-body">
+                {{ student.class }}
+              </td>
+              <td class="p-4 text-center text-secondary font-body">
+                {{ student.time || '-' }}
+              </td>
               <td class="p-4 text-center">
                 <StatusBadge :status="student.status" />
               </td>
@@ -229,7 +327,10 @@ const resetFilters = () => {
               </td>
             </tr>
             <tr v-if="!paginatedStudents.length">
-              <td colspan="7" class="p-8 text-center text-secondary">
+              <td
+                colspan="7"
+                class="p-8 text-center text-secondary"
+              >
                 Tidak ada data siswa ditemukan.
               </td>
             </tr>
@@ -248,23 +349,15 @@ const resetFilters = () => {
             :disabled="currentPage === 1"
             @click="currentPage--"
           >
-            <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+            <span class="material-symbols-outlined text-[18px]">chevron_left</span>
           </button>
-          <button
-            v-for="page in totalPages"
-            :key="page"
-            class="w-8 h-8 rounded flex items-center justify-center font-medium transition-colors"
-            :class="page === currentPage ? 'bg-primary text-white' : 'border border-surface-container-highest text-secondary hover:border-primary'"
-            @click="currentPage = page"
-          >
-            {{ page }}
-          </button>
+          <span class="px-3 font-bold text-on-surface">{{ currentPage }} / {{ totalPages }}</span>
           <button
             class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-50"
             :disabled="currentPage >= totalPages"
             @click="currentPage++"
           >
-            <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+            <span class="material-symbols-outlined text-[18px]">chevron_right</span>
           </button>
         </div>
       </div>

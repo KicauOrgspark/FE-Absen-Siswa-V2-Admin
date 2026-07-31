@@ -8,11 +8,11 @@ export interface Student {
   parentName?: string
   parentPhone?: string
   class: string
-  major: 'RPL' | 'TKJ' | 'DKV' | 'LPB' | 'TOI'
-  grade: 'X' | 'XI' | 'XII'
+  major: 'RPL' | 'TKJ' | 'DKV' | 'LPB' | 'TOI' | string
+  grade: 'X' | 'XI' | 'XII' | string
   time?: string
-  status: 'Hadir' | 'Sakit' | 'Izin' | 'Alpa' | 'Belum Absen'
-  activeStatus: 'AKTIF' | 'PKL' | 'NON AKTIF'
+  status: 'Hadir' | 'Sakit' | 'Izin' | 'Alpa' | 'Belum Absen' | string
+  activeStatus: 'AKTIF' | 'PKL' | 'NON AKTIF' | string
   alpaCount: number
   avatarInitials: string
 }
@@ -27,191 +27,63 @@ export interface WATemplateState {
   }
 }
 
-const initialStudents: Student[] = [
-  {
-    id: 'std-1',
-    nisn: '26271007190',
-    name: 'Adli Firdaus',
-    email: 'adli.firdaus@student.pelitanusantara.sch.id',
-    parentPhone: '081287654321',
-    class: 'X DKV-1',
-    major: 'DKV',
-    grade: 'X',
-    time: '-',
-    status: 'Belum Absen',
-    activeStatus: 'AKTIF',
-    alpaCount: 0,
-    avatarInitials: 'AF'
-  },
-  {
-    id: 'std-2',
-    nisn: '26271007217',
-    name: 'Ananda Rama Saputra',
-    email: 'ananda.rama@student.pelitanusantara.sch.id',
-    parentPhone: '081398765432',
-    class: 'X DKV-1',
-    major: 'DKV',
-    grade: 'X',
-    time: '-',
-    status: 'Belum Absen',
-    activeStatus: 'AKTIF',
-    alpaCount: 1,
-    avatarInitials: 'AR'
-  },
-  {
-    id: 'std-3',
-    nisn: '26271007277',
-    name: 'Andira Khalis Ady Pratama',
-    email: 'andira.khalis@student.pelitanusantara.sch.id',
-    parentPhone: '085712345678',
-    class: 'X DKV-1',
-    major: 'DKV',
-    grade: 'X',
-    time: '-',
-    status: 'Belum Absen',
-    activeStatus: 'AKTIF',
-    alpaCount: 0,
-    avatarInitials: 'AK'
-  },
-  {
-    id: 'std-4',
-    nisn: '26271007296',
-    name: 'Berry Wisnu Wardana',
-    email: 'berry.wisnu@student.pelitanusantara.sch.id',
-    parentPhone: '081299887766',
-    class: 'X DKV-1',
-    major: 'DKV',
-    grade: 'X',
-    time: '-',
-    status: 'Belum Absen',
-    activeStatus: 'AKTIF',
-    alpaCount: 2,
-    avatarInitials: 'BW'
-  },
-  {
-    id: 'std-5',
-    nisn: '26271007108',
-    name: 'Cindy Cantika Dewi',
-    email: 'cindy.cantika@student.pelitanusantara.sch.id',
-    parentPhone: '081311223344',
-    class: 'X DKV-1',
-    major: 'DKV',
-    grade: 'X',
-    time: '-',
-    status: 'Belum Absen',
-    activeStatus: 'AKTIF',
-    alpaCount: 0,
-    avatarInitials: 'CC'
-  },
-  {
-    id: 'std-6',
-    nisn: '26271007245',
-    name: 'Dhava Nur Rahman',
-    email: 'dhava.nur@student.pelitanusantara.sch.id',
-    parentPhone: '085644556677',
-    class: 'X DKV-1',
-    major: 'DKV',
-    grade: 'X',
-    time: '-',
-    status: 'Belum Absen',
-    activeStatus: 'AKTIF',
-    alpaCount: 0,
-    avatarInitials: 'DN'
-  },
-  {
-    id: 'std-7',
-    nisn: '26271007264',
-    name: 'Dylen Ramadhan',
-    email: 'dylen.ramadhan@student.pelitanusantara.sch.id',
-    parentPhone: '081255667788',
-    class: 'X DKV-1',
-    major: 'DKV',
-    grade: 'X',
-    time: '-',
-    status: 'Belum Absen',
-    activeStatus: 'AKTIF',
-    alpaCount: 0,
-    avatarInitials: 'DR'
-  },
-  {
-    id: 'std-8',
-    nisn: '26271007175',
-    name: 'Eisha Marta Makarim',
-    email: 'eisha.marta@student.pelitanusantara.sch.id',
-    parentPhone: '081377889900',
-    class: 'X DKV-1',
-    major: 'DKV',
-    grade: 'X',
-    time: '-',
-    status: 'Belum Absen',
-    activeStatus: 'AKTIF',
-    alpaCount: 0,
-    avatarInitials: 'EM'
-  },
-  {
-    id: 'std-9',
-    nisn: 'TRB-1030',
-    name: 'Jason Mendoza',
-    email: 'jason.mendoza@student.pelitanusantara.sch.id',
-    parentPhone: '081234567890',
-    class: 'X RPL 1',
-    major: 'RPL',
-    grade: 'X',
-    time: '-',
-    status: 'Alpa',
-    activeStatus: 'AKTIF',
-    alpaCount: 12,
-    avatarInitials: 'JM'
-  },
-  {
-    id: 'std-10',
-    nisn: 'TRB-1031',
-    name: 'Tahani Al-Jamil',
-    email: 'tahani.aljamil@student.pelitanusantara.sch.id',
-    parentPhone: '089876543210',
-    class: 'XI TKJ 2',
-    major: 'TKJ',
-    grade: 'XI',
-    time: '08:42 AM',
-    status: 'Hadir',
-    activeStatus: 'PKL',
-    alpaCount: 8,
-    avatarInitials: 'TA'
-  },
-  {
-    id: 'std-11',
-    nisn: 'TRB-1032',
-    name: 'Chidi Anagonye',
-    email: 'chidi.anagonye@student.pelitanusantara.sch.id',
-    parentPhone: '085612345678',
-    class: 'XII TOI 1',
-    major: 'TOI',
-    grade: 'XII',
-    time: '08:10 AM',
-    status: 'Hadir',
-    activeStatus: 'AKTIF',
-    alpaCount: 7,
-    avatarInitials: 'CA'
-  },
-  {
-    id: 'std-12',
-    nisn: 'TRB-1029',
-    name: 'Eleanor Shellstrop',
-    email: 'eleanor.shellstrop@student.pelitanusantara.sch.id',
-    parentPhone: '081233445566',
-    class: 'X RPL 1',
-    major: 'RPL',
-    grade: 'X',
-    time: '08:15 AM',
-    status: 'Hadir',
-    activeStatus: 'AKTIF',
-    alpaCount: 5,
-    avatarInitials: 'ES'
-  }
-]
+export interface ClassItem {
+  id?: number | string
+  name?: string
+  class_name?: string
+  code?: string
+  [key: string]: unknown
+}
+
+const initialStudents: Student[] = []
+
+export const normalizeStatus = (st: string): string => {
+  if (!st) return 'Belum Absen'
+  const lower = String(st).toLowerCase().trim()
+  if (lower === 'hadir') return 'Hadir'
+  if (lower === 'sakit') return 'Sakit'
+  if (lower === 'izin') return 'Izin'
+  if (lower === 'alpa' || lower === 'alfa') return 'Alpa'
+  if (lower === 'pkl') return 'PKL'
+  if (lower === 'aktif' || lower === 'active') return 'AKTIF'
+  if (lower === 'non_aktif' || lower === 'non-aktif' || lower === 'non aktif' || lower === 'inactive') return 'NON AKTIF'
+  if (lower === 'belum_absen' || lower === 'belum absen') return 'Belum Absen'
+  return st
+}
+
+const extractList = (res: unknown): Record<string, unknown>[] => {
+  if (!res) return []
+  if (Array.isArray(res)) return res as Record<string, unknown>[]
+  const obj = res as Record<string, unknown>
+  if (Array.isArray(obj.data)) return obj.data as Record<string, unknown>[]
+  if (Array.isArray(obj.users)) return obj.users as Record<string, unknown>[]
+  if (Array.isArray(obj.students)) return obj.students as Record<string, unknown>[]
+  if (Array.isArray(obj.items)) return obj.items as Record<string, unknown>[]
+  if (Array.isArray(obj.result)) return obj.result as Record<string, unknown>[]
+  return []
+}
 
 export const useAttendance = () => {
+  const { fetchApi } = useApi()
+
   const students = useState<Student[]>('students', () => initialStudents)
+  const availableClasses = useState<ClassItem[]>('availableClasses', () => [])
+  const isFetching = useState<boolean>('isFetchingAttendance', () => false)
+
+  const dashboardMetrics = useState('dashboardMetrics', () => ({
+    totalStudents: 0,
+    totalAbsenHariIni: 0,
+    hadirCount: 0,
+    sakitCount: 0,
+    alpaCount: 0,
+    izinCount: 0
+  }))
+
+  const trendData = useState('trendData', () => ({
+    labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'],
+    hadir: [0, 0, 0, 0, 0, 0, 0],
+    alpa: [0, 0, 0, 0, 0, 0, 0]
+  }))
 
   const waConfig = useState<WATemplateState>('waConfig', () => ({
     automationEnabled: true,
@@ -224,92 +96,254 @@ export const useAttendance = () => {
   }))
 
   const qrSession = useState('qrSession', () => ({
+    id: '1',
     token: 'TRB-8941-SECURE',
     lastUpdated: '09.35.12',
     countdown: 30,
-    isActive: false
+    isActive: false,
+    imageUrl: ''
   }))
 
-  // Stats Computations
+  const getInitials = (name: string): string => {
+    if (!name) return 'S'
+    const parts = name.trim().split(' ')
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }
+
+  const fetchDashboardStats = async () => {
+    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/dashboard')
+    if (data) {
+      dashboardMetrics.value = {
+        totalStudents: Number(data.total_siswa ?? data.total_students ?? dashboardMetrics.value.totalStudents),
+        totalAbsenHariIni: Number(data.total_absen_hari_ini ?? data.total_absen ?? 0),
+        hadirCount: Number(data.hadir_count ?? data.hadir ?? 0),
+        sakitCount: Number(data.sakit_count ?? data.sakit ?? 0),
+        alpaCount: Number(data.alpa_count ?? data.alpa ?? 0),
+        izinCount: Number(data.izin_count ?? data.izin ?? 0)
+      }
+    }
+  }
+
+  const fetchDashboardTrend = async () => {
+    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/dashboard/trend')
+    if (data) {
+      trendData.value = {
+        labels: (data.labels as string[]) || trendData.value.labels,
+        hadir: (data.hadir as number[]) || trendData.value.hadir,
+        alpa: (data.alpa as number[]) || trendData.value.alpa
+      }
+    }
+  }
+
+  const fetchAttendanceStudents = async (filters?: { class_group?: string, status?: string, angkatan?: string, jurusan?: string }) => {
+    isFetching.value = true
+    const apiParams = { ...filters }
+    if (apiParams.status && apiParams.status.toLowerCase() === 'alpa') {
+      apiParams.status = 'alfa'
+    } else if (apiParams.status) {
+      apiParams.status = apiParams.status.toLowerCase()
+    }
+
+    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/students', { params: apiParams })
+    isFetching.value = false
+
+    const list = extractList(data)
+    students.value = list.map((item: Record<string, unknown>) => ({
+      id: String(item.id || item.user_id || `std-${Math.random()}`),
+      nisn: String(item.nisn || item.username || '-'),
+      name: String(item.full_name || item.name || 'Siswa'),
+      username: String(item.username || ''),
+      email: String(item.email || ''),
+      parentName: String(item.parent_name || ''),
+      parentPhone: String(item.parent_phone || ''),
+      class: String(item.class_group || item.class || 'X DKV-1'),
+      major: String(item.jurusan || item.major || (String(item.class_group || '').split(' ')?.[1]) || 'DKV'),
+      grade: String(item.angkatan || item.grade || (String(item.class_group || '').split(' ')?.[0]) || 'X'),
+      time: String(item.time || item.created_at || '-'),
+      status: normalizeStatus(String(item.status || 'Belum Absen')),
+      activeStatus: normalizeStatus(String(item.active_status || item.role || 'AKTIF')),
+      alpaCount: Number(item.alpa_count || item.total_alfa || 0),
+      avatarInitials: getInitials(String(item.full_name || item.name || ''))
+    }))
+  }
+
+  const fetchClassesList = async () => {
+    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/classes')
+    const list = extractList(data)
+    if (list.length) {
+      availableClasses.value = list
+    }
+  }
+
+  const updateStudentStatus = async (studentId: string, status: Student['status']) => {
+    const student = students.value.find(s => s.id === studentId)
+    if (student) {
+      const now = new Date()
+      const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+      student.status = normalizeStatus(status)
+      student.time = status === 'Belum Absen' ? '-' : timeStr
+
+      const apiStatus = status.toLowerCase() === 'alpa' ? 'alfa' : status.toLowerCase()
+
+      const { error: err } = await fetchApi('/api/v1/attendance/status', {
+        method: 'PUT',
+        body: {
+          user_id: Number(studentId) || studentId,
+          status: apiStatus
+        }
+      })
+
+      if (!err) {
+        fetchDashboardStats()
+      }
+    }
+  }
+
+  const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string } = {}) => {
+    isFetching.value = true
+    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
+      params: {
+        page: params.page || 1,
+        limit: params.limit || 20,
+        role: params.role || 'siswa',
+        class_group: params.class_group,
+        search: params.search
+      }
+    })
+    isFetching.value = false
+
+    const list = extractList(data)
+    students.value = list.map((u: Record<string, unknown>) => ({
+      id: String(u.id),
+      nisn: String(u.nisn || u.username || '-'),
+      name: String(u.full_name || u.name || 'Siswa'),
+      username: String(u.username || ''),
+      email: String(u.email || ''),
+      parentName: String(u.parent_name || ''),
+      parentPhone: String(u.parent_phone || ''),
+      class: String(u.class_group || u.class || 'X DKV-1'),
+      major: String(u.jurusan || (String(u.class_group || '').split(' ')?.[1]) || 'DKV'),
+      grade: String(u.angkatan || (String(u.class_group || '').split(' ')?.[0]) || 'X'),
+      time: String(u.created_at || '-'),
+      status: normalizeStatus(String(u.status || 'Belum Absen')),
+      activeStatus: normalizeStatus(String(u.active_status || 'AKTIF')),
+      alpaCount: Number(u.alpa_count || 0),
+      avatarInitials: getInitials(String(u.full_name || u.name || ''))
+    }))
+    return data
+  }
+
+  const addStudent = async (studentData: Omit<Student, 'id' | 'avatarInitials'>) => {
+    const payload = {
+      nisn: studentData.nisn,
+      full_name: studentData.name,
+      username: studentData.username || studentData.nisn,
+      password: studentData.password || 'password123',
+      role: 'siswa',
+      class_group: studentData.class,
+      parent_phone: studentData.parentPhone || ''
+    }
+
+    const { data } = await fetchApi('/api/v1/users', {
+      method: 'POST',
+      body: payload
+    })
+
+    if (data) {
+      fetchUsers()
+    }
+  }
+
+  const updateStudent = async (id: string, updatedData: Partial<Student>) => {
+    const payload: Record<string, unknown> = {}
+    if (updatedData.nisn) payload.nisn = updatedData.nisn
+    if (updatedData.name) payload.full_name = updatedData.name
+    if (updatedData.username) payload.username = updatedData.username
+    if (updatedData.class) payload.class_group = updatedData.class
+    if (updatedData.parentPhone) payload.parent_phone = updatedData.parentPhone
+
+    const { data } = await fetchApi(`/api/v1/users/${id}`, {
+      method: 'PUT',
+      body: payload
+    })
+
+    if (data) {
+      fetchUsers()
+    }
+  }
+
+  const deleteStudent = async (id: string) => {
+    const { status } = await fetchApi(`/api/v1/users/${id}`, {
+      method: 'DELETE'
+    })
+
+    if (status === 200) {
+      fetchUsers()
+    } else {
+      students.value = students.value.filter(s => s.id !== id)
+    }
+  }
+
+  const resetStudentPassword = async (id: string, newPassword: string) => {
+    return await fetchApi(`/api/v1/users/${id}/reset-password`, {
+      method: 'POST',
+      body: { new_password: newPassword }
+    })
+  }
+
+  const importUsersExcel = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    return await fetchApi('/api/v1/import/users', {
+      method: 'POST',
+      body: formData,
+      isFormData: true
+    })
+  }
+
   const stats = computed(() => {
-    const baseTotal = 1048
-    const totalAbsenHariIni = students.value.filter(s => s.status !== 'Belum Absen').length
-    const hadir = students.value.filter(s => s.status === 'Hadir').length
-    const sakit = students.value.filter(s => s.status === 'Sakit').length
-    const alpa = students.value.filter(s => s.status === 'Alpa').length
+    const totalAbsenHariIni = students.value.filter(s => s.status?.toLowerCase() !== 'belum absen' && s.status?.toLowerCase() !== 'belum_absen').length
+    const hadir = students.value.filter(s => s.status?.toLowerCase() === 'hadir').length
+    const sakit = students.value.filter(s => s.status?.toLowerCase() === 'sakit').length
+    const alpa = students.value.filter(s => s.status?.toLowerCase() === 'alpa' || s.status?.toLowerCase() === 'alfa').length
 
     return {
-      totalStudents: baseTotal + students.value.length - initialStudents.length,
-      totalAbsenHariIni,
-      hadirCount: hadir,
-      sakitCount: sakit,
-      alpaCount: alpa
+      totalStudents: dashboardMetrics.value.totalStudents || students.value.length,
+      totalAbsenHariIni: dashboardMetrics.value.totalAbsenHariIni || totalAbsenHariIni,
+      hadirCount: dashboardMetrics.value.hadirCount || hadir,
+      sakitCount: dashboardMetrics.value.sakitCount || sakit,
+      alpaCount: dashboardMetrics.value.alpaCount || alpa
     }
   })
 
-  // Department Attendance Percentages
   const departmentStats = computed(() => {
     const majors: Array<'RPL' | 'TKJ' | 'DKV' | 'LPB' | 'TOI'> = ['RPL', 'TKJ', 'DKV', 'LPB', 'TOI']
-    return majors.map(m => {
+    return majors.map((m) => {
       const list = students.value.filter(s => s.major === m)
       if (!list.length) return { major: m, percentage: 0 }
-      const present = list.filter(s => s.status === 'Hadir').length
+      const present = list.filter(s => s.status?.toLowerCase() === 'hadir').length
       const percentage = Math.round((present / list.length) * 100)
       return { major: m, percentage }
     })
   })
 
-  // Top Most Absent Students
   const topAbsents = computed(() => {
     return [...students.value]
       .sort((a, b) => b.alpaCount - a.alpaCount)
       .slice(0, 10)
   })
 
-  // Actions
-  const updateStudentStatus = (studentId: string, status: Student['status']) => {
-    const student = students.value.find(s => s.id === studentId)
-    if (student) {
-      const now = new Date()
-      const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      student.status = status
-      student.time = status === 'Belum Absen' ? '-' : timeStr
-      if (status === 'Alpa') {
-        student.alpaCount += 1
-      }
-    }
-  }
-
-  const addStudent = (studentData: Omit<Student, 'id' | 'avatarInitials'>) => {
-    const newId = `std-${Date.now()}`
-    const initials = studentData.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
-    students.value.unshift({
-      ...studentData,
-      id: newId,
-      avatarInitials: initials
-    })
-  }
-
-  const updateStudent = (id: string, updatedData: Partial<Student>) => {
-    const index = students.value.findIndex(s => s.id === id)
-    const existing = students.value[index]
-    if (index !== -1 && existing) {
-      students.value[index] = { ...existing, ...updatedData }
-    }
-  }
-
-  const deleteStudent = (id: string) => {
-    students.value = students.value.filter(s => s.id !== id)
-  }
-
   const refreshQRToken = () => {
-    const randomCode = Math.floor(1000 + Math.random() * 9000)
+    const randomCode = 'TRB-' + Math.floor(1000 + Math.random() * 9000) + '-SECURE'
     const now = new Date()
+    const timeStr = now.toTimeString().split(' ')[0]
     qrSession.value = {
-      token: `TRB-${randomCode}-TOKEN`,
-      lastUpdated: now.toLocaleTimeString('id-ID'),
-      countdown: 30,
-      isActive: true
+      ...qrSession.value,
+      token: randomCode,
+      lastUpdated: timeStr,
+      countdown: 30
     }
   }
 
@@ -317,23 +351,29 @@ export const useAttendance = () => {
     qrSession.value.isActive = !qrSession.value.isActive
   }
 
-  const saveWATemplate = (tab: 'izin' | 'sakit' | 'alfa', content: string) => {
-    waConfig.value.templates[tab] = content
-  }
-
   return {
     students,
+    availableClasses,
+    dashboardMetrics,
+    trendData,
     waConfig,
     qrSession,
+    isFetching,
     stats,
     departmentStats,
     topAbsents,
+    fetchDashboardStats,
+    fetchDashboardTrend,
+    fetchAttendanceStudents,
+    fetchClassesList,
+    fetchUsers,
     updateStudentStatus,
     addStudent,
     updateStudent,
     deleteStudent,
+    resetStudentPassword,
+    importUsersExcel,
     refreshQRToken,
-    toggleQRActive,
-    saveWATemplate
+    toggleQRActive
   }
 }

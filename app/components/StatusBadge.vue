@@ -1,10 +1,22 @@
 <script setup lang="ts">
 const props = defineProps<{
-  status: 'Hadir' | 'Sakit' | 'Alpa' | 'Belum Absen' | 'Active' | 'Inactive' | string
+  status: 'Hadir' | 'Sakit' | 'Alpa' | 'Izin' | 'Belum Absen' | 'Active' | 'Inactive' | string
 }>()
 
+const normalizedStatus = computed(() => {
+  if (!props.status) return 'Belum Absen'
+  const lower = String(props.status).toLowerCase().trim()
+  if (lower === 'hadir' || lower === 'active' || lower === 'aktif') return 'Hadir'
+  if (lower === 'sakit') return 'Sakit'
+  if (lower === 'izin') return 'Izin'
+  if (lower === 'alpa' || lower === 'alfa') return 'Alpa'
+  if (lower === 'pkl') return 'PKL'
+  if (lower === 'non_aktif' || lower === 'non-aktif' || lower === 'non aktif' || lower === 'inactive') return 'NON AKTIF'
+  return props.status
+})
+
 const badgeClasses = computed(() => {
-  switch (props.status) {
+  switch (normalizedStatus.value) {
     case 'Hadir':
     case 'Active':
     case 'AKTIF':
@@ -27,7 +39,7 @@ const badgeClasses = computed(() => {
 })
 
 const dotColor = computed(() => {
-  switch (props.status) {
+  switch (normalizedStatus.value) {
     case 'Hadir':
     case 'Active':
     case 'AKTIF':
@@ -55,7 +67,10 @@ const dotColor = computed(() => {
     class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-label text-xs font-medium"
     :class="badgeClasses"
   >
-    <span class="w-1.5 h-1.5 rounded-full block shrink-0" :class="dotColor"></span>
-    <span>{{ status }}</span>
+    <span
+      class="w-1.5 h-1.5 rounded-full block shrink-0"
+      :class="dotColor"
+    />
+    <span>{{ normalizedStatus }}</span>
   </span>
 </template>

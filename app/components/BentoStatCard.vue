@@ -4,7 +4,7 @@ defineProps<{
   value: string | number
   icon: string
   accentColor?: 'green' | 'red' | 'default'
-  subBadges?: Array<{ text: string; color: string }>
+  subBadges?: Array<{ text: string, color: string }>
 }>()
 </script>
 
@@ -14,11 +14,11 @@ defineProps<{
     <div
       v-if="accentColor === 'green'"
       class="absolute top-0 left-0 w-full h-1 bg-[#00875a]"
-    ></div>
+    />
     <div
       v-else-if="accentColor === 'red'"
       class="absolute top-0 left-0 w-full h-1 bg-[#de350b]"
-    ></div>
+    />
 
     <!-- Header -->
     <div class="flex justify-between items-center mb-6 z-10">
@@ -40,7 +40,10 @@ defineProps<{
       <div class="font-headline text-[32px] text-deep-black font-bold leading-none">
         {{ value }}
       </div>
-      <div v-if="subBadges && subBadges.length" class="text-right flex flex-col gap-0.5">
+      <div
+        v-if="subBadges && subBadges.length"
+        class="text-right flex flex-col gap-0.5"
+      >
         <p
           v-for="(badge, index) in subBadges"
           :key="index"
