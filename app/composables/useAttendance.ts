@@ -12,6 +12,7 @@ export interface Student {
   grade: 'X' | 'XI' | 'XII' | string
   time?: string
   status: 'Hadir' | 'Sakit' | 'Izin' | 'Alpa' | 'Belum Absen' | string
+  role?: 'siswa' | 'admin' | string
   activeStatus: 'AKTIF' | 'PKL' | 'NON AKTIF' | string
   alpaCount: number
   avatarInitials: string
@@ -37,18 +38,47 @@ export interface ClassItem {
 
 const initialStudents: Student[] = []
 
+export const normalizeActiveStatus = (st: unknown): string => {
+  if (st === undefined || st === null) return 'AKTIF'
+  const str = String(st).trim()
+  if (!str || str === 'undefined' || str === 'null') return 'AKTIF'
+  const lower = str.toLowerCase().replace(/[-_ ]/g, '')
+  if (lower === 'pkl') return 'PKL'
+  if (lower === 'nonaktif' || lower === 'inactive' || lower === 'non') return 'NON AKTIF'
+  if (lower === 'aktif' || lower === 'active') return 'AKTIF'
+  return str.toUpperCase()
+}
+
 export const normalizeStatus = (st: string): string => {
-  if (!st) return 'Belum Absen'
+  if (!st || st === 'undefined' || st === 'null' || st.trim() === '') return 'Hadir'
   const lower = String(st).toLowerCase().trim()
   if (lower === 'hadir') return 'Hadir'
   if (lower === 'sakit') return 'Sakit'
   if (lower === 'izin') return 'Izin'
   if (lower === 'alpa' || lower === 'alfa') return 'Alpa'
   if (lower === 'pkl') return 'PKL'
-  if (lower === 'aktif' || lower === 'active') return 'AKTIF'
-  if (lower === 'non_aktif' || lower === 'non-aktif' || lower === 'non aktif' || lower === 'inactive') return 'NON AKTIF'
-  if (lower === 'belum_absen' || lower === 'belum absen') return 'Belum Absen'
+  if (lower === 'belum_absen' || lower === 'belum absen') return 'Hadir'
   return st
+}
+
+const getGradeFromClass = (cls: string): string => {
+  if (!cls) return 'X'
+  const upper = cls.trim().toUpperCase()
+  if (upper.startsWith('XII')) return 'XII'
+  if (upper.startsWith('XI')) return 'XI'
+  if (upper.startsWith('X')) return 'X'
+  return 'X'
+}
+
+const getMajorFromClass = (cls: string): string => {
+  if (!cls) return 'RPL'
+  const upper = cls.trim().toUpperCase()
+  if (upper.includes('RPL')) return 'RPL'
+  if (upper.includes('TKJ')) return 'TKJ'
+  if (upper.includes('DKV')) return 'DKV'
+  if (upper.includes('LPB')) return 'LPB'
+  if (upper.includes('TOI')) return 'TOI'
+  return 'RPL'
 }
 
 const extractList = (res: unknown): Record<string, unknown>[] => {
@@ -60,6 +90,14 @@ const extractList = (res: unknown): Record<string, unknown>[] => {
   if (Array.isArray(obj.students)) return obj.students as Record<string, unknown>[]
   if (Array.isArray(obj.items)) return obj.items as Record<string, unknown>[]
   if (Array.isArray(obj.result)) return obj.result as Record<string, unknown>[]
+  if (obj.data && typeof obj.data === 'object') {
+    const subObj = obj.data as Record<string, unknown>
+    if (Array.isArray(subObj.users)) return subObj.users as Record<string, unknown>[]
+    if (Array.isArray(subObj.students)) return subObj.students as Record<string, unknown>[]
+    if (Array.isArray(subObj.data)) return subObj.data as Record<string, unknown>[]
+    if (Array.isArray(subObj.items)) return subObj.items as Record<string, unknown>[]
+    if (Array.isArray(subObj.result)) return subObj.result as Record<string, unknown>[]
+  }
   return []
 }
 
@@ -146,26 +184,38 @@ export const useAttendance = () => {
     }
 
     const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/students', { params: apiParams })
-    isFetching.value = false
 
-    const list = extractList(data)
-    students.value = list.map((item: Record<string, unknown>) => ({
-      id: String(item.id || item.user_id || `std-${Math.random()}`),
-      nisn: String(item.nisn || item.username || '-'),
-      name: String(item.full_name || item.name || 'Siswa'),
-      username: String(item.username || ''),
-      email: String(item.email || ''),
-      parentName: String(item.parent_name || ''),
-      parentPhone: String(item.parent_phone || ''),
-      class: String(item.class_group || item.class || 'X DKV-1'),
-      major: String(item.jurusan || item.major || (String(item.class_group || '').split(' ')?.[1]) || 'DKV'),
-      grade: String(item.angkatan || item.grade || (String(item.class_group || '').split(' ')?.[0]) || 'X'),
-      time: String(item.time || item.created_at || '-'),
-      status: normalizeStatus(String(item.status || 'Belum Absen')),
-      activeStatus: normalizeStatus(String(item.active_status || item.role || 'AKTIF')),
-      alpaCount: Number(item.alpa_count || item.total_alfa || 0),
-      avatarInitials: getInitials(String(item.full_name || item.name || ''))
-    }))
+    let list = extractList(data)
+
+    // Fallback: if attendance endpoint returns empty, fetch users directly from DB
+    if (!list.length) {
+      const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
+        params: { limit: 100, role: 'siswa', class_group: filters?.class_group }
+      })
+      list = extractList(usersData)
+    }
+
+    students.value = list.map((item: Record<string, unknown>) => {
+      const cls = String(item.class_group || item.class || 'X DKV-1')
+      return {
+        id: String(item.id || item.user_id || `std-${Math.random()}`),
+        nisn: String(item.nisn || item.username || '-'),
+        name: String(item.full_name || item.name || 'Siswa'),
+        username: String(item.username || ''),
+        email: String(item.email || ''),
+        parentName: String(item.parent_name || ''),
+        parentPhone: String(item.parent_phone || ''),
+        class: cls,
+        major: String(item.jurusan || item.major || getMajorFromClass(cls)),
+        grade: String(item.angkatan || item.grade || getGradeFromClass(cls)),
+        time: String(item.time || item.created_at || '07:00'),
+        status: normalizeStatus(String(item.attendance_status || item.presensi_status || 'Hadir')),
+        activeStatus: normalizeActiveStatus(item.status ?? item.active_status ?? item.user_status ?? item.status_keaktifan),
+        alpaCount: Number(item.alpa_count || item.total_alfa || 0),
+        avatarInitials: getInitials(String(item.full_name || item.name || ''))
+      }
+    })
+    isFetching.value = false
   }
 
   const fetchClassesList = async () => {
@@ -200,37 +250,57 @@ export const useAttendance = () => {
     }
   }
 
-  const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string } = {}) => {
+  const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string, status?: string } = {}) => {
     isFetching.value = true
     const { data } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
       params: {
         page: params.page || 1,
-        limit: params.limit || 20,
+        limit: params.limit || 100,
         role: params.role || 'siswa',
         class_group: params.class_group,
-        search: params.search
+        search: params.search,
+        status: params.status
       }
     })
+
+    let list = extractList(data)
+
+    // Fallback: If filtering by role='siswa' returns empty, retry without role filter to get DB users
+    if (!list.length) {
+      const { data: fallbackData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
+        params: {
+          page: params.page || 1,
+          limit: params.limit || 100,
+          class_group: params.class_group,
+          search: params.search
+        }
+      })
+      list = extractList(fallbackData)
+    }
     isFetching.value = false
 
-    const list = extractList(data)
-    students.value = list.map((u: Record<string, unknown>) => ({
-      id: String(u.id),
-      nisn: String(u.nisn || u.username || '-'),
-      name: String(u.full_name || u.name || 'Siswa'),
-      username: String(u.username || ''),
-      email: String(u.email || ''),
-      parentName: String(u.parent_name || ''),
-      parentPhone: String(u.parent_phone || ''),
-      class: String(u.class_group || u.class || 'X DKV-1'),
-      major: String(u.jurusan || (String(u.class_group || '').split(' ')?.[1]) || 'DKV'),
-      grade: String(u.angkatan || (String(u.class_group || '').split(' ')?.[0]) || 'X'),
-      time: String(u.created_at || '-'),
-      status: normalizeStatus(String(u.status || 'Belum Absen')),
-      activeStatus: normalizeStatus(String(u.active_status || 'AKTIF')),
-      alpaCount: Number(u.alpa_count || 0),
-      avatarInitials: getInitials(String(u.full_name || u.name || ''))
-    }))
+    students.value = list.map((u: Record<string, unknown>) => {
+      console.log('[DEBUG fetchUsers] raw user:', u.full_name, '| status:', u.status, '| active_status:', u.active_status)
+      const cls = String(u.class_group || u.class || 'X DKV-1')
+      return {
+        id: String(u.id),
+        nisn: String(u.nisn || u.username || '-'),
+        name: String(u.full_name || u.name || 'Siswa'),
+        username: String(u.username || ''),
+        email: String(u.email || ''),
+        parentName: String(u.parent_name || ''),
+        parentPhone: String(u.parent_phone || ''),
+        class: cls,
+        major: String(u.jurusan || getMajorFromClass(cls)),
+        grade: String(u.angkatan || getGradeFromClass(cls)),
+        time: String(u.created_at || '-'),
+        status: normalizeStatus(String(u.attendance_status || u.presensi_status || 'Hadir')),
+        role: String(u.role || 'siswa'),
+        activeStatus: normalizeActiveStatus(u.status ?? u.active_status ?? u.user_status ?? u.status_keaktifan),
+        alpaCount: Number(u.alpa_count || 0),
+        avatarInitials: getInitials(String(u.full_name || u.name || ''))
+      }
+    })
     return data
   }
 
@@ -240,9 +310,10 @@ export const useAttendance = () => {
       full_name: studentData.name,
       username: studentData.username || studentData.nisn,
       password: studentData.password || 'password123',
-      role: 'siswa',
+      role: studentData.role || 'siswa',
       class_group: studentData.class,
-      parent_phone: studentData.parentPhone || ''
+      parent_phone: studentData.parentPhone || '',
+      status: studentData.activeStatus === 'NON AKTIF' ? 'NONAKTIF' : (studentData.activeStatus || 'AKTIF')
     }
 
     const { data } = await fetchApi('/api/v1/users', {
@@ -260,8 +331,12 @@ export const useAttendance = () => {
     if (updatedData.nisn) payload.nisn = updatedData.nisn
     if (updatedData.name) payload.full_name = updatedData.name
     if (updatedData.username) payload.username = updatedData.username
+    if (updatedData.role) payload.role = updatedData.role
     if (updatedData.class) payload.class_group = updatedData.class
     if (updatedData.parentPhone) payload.parent_phone = updatedData.parentPhone
+    if (updatedData.activeStatus) {
+      payload.status = updatedData.activeStatus === 'NON AKTIF' ? 'NONAKTIF' : updatedData.activeStatus
+    }
 
     const { data } = await fetchApi(`/api/v1/users/${id}`, {
       method: 'PUT',

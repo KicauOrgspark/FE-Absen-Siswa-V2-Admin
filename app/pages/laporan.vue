@@ -34,7 +34,7 @@ const fetchAttendanceLogs = async () => {
   const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
     params: {
       page: 1,
-      limit: 20,
+      limit: 12,
       start_date: fromDate.value,
       end_date: toDate.value,
       class_group: selectedGrade.value !== 'Grade X' ? selectedGrade.value : undefined,
@@ -93,6 +93,8 @@ const exportToExcel = async () => {
   const kelas = selectedGrade.value !== 'Grade X' ? selectedGrade.value : 'X-RPL-1'
   const jurusan = selectedMajor.value !== 'All Majors' ? selectedMajor.value : 'RPL'
 
+  const { getToken } = useApi()
+  const token = getToken()
   const exportUrl = getExportUrl('/api/v1/export/attendance', {
     kelas,
     jurusan,
@@ -101,13 +103,22 @@ const exportToExcel = async () => {
   })
 
   try {
+    const blob = await $fetch<Blob>(exportUrl, {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      responseType: 'blob'
+    })
+
+    const blobUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = exportUrl
-    link.target = '_blank'
+    link.href = blobUrl
     link.setAttribute('download', `Laporan_Presensi_${fromDate.value}_sd_${toDate.value}.xlsx`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
   } catch (err) {
     console.error('Export download error:', err)
   } finally {

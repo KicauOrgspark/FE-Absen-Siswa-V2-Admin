@@ -10,6 +10,9 @@ const {
   updateStudentStatus
 } = useAttendance()
 
+const { user: authUser } = useAuth()
+const adminName = computed(() => authUser.value?.full_name || authUser.value?.name || authUser.value?.username || 'Admin')
+
 const searchQuery = ref('')
 const selectedGrade = ref('Semua Angkatan')
 const selectedClass = ref('Semua Kelas')
@@ -53,7 +56,7 @@ const filteredStudents = computed(() => {
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div>
         <h2 class="font-headline text-headline-lg text-primary md:text-[36px] font-bold mb-1">
-          Selamat Datang, Admin
+          Selamat Datang, {{ adminName }}
         </h2>
         <p class="font-body text-body-lg text-secondary">
           Ringkasan presensi harian siswa hari ini.

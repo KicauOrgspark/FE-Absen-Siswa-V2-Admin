@@ -32,15 +32,21 @@ export const useApi = () => {
   const config = useRuntimeConfig()
   const apiBase = (config.public.apiBase as string) || 'https://api.smart-presence.smkpluspnb.sch.id'
 
-  const getToken = (): string => {
-    const tokenCookie = useCookie<string>('auth_token')
-    if (tokenCookie.value) return tokenCookie.value
+  // Use a single shared cookie ref for the token
+  const tokenCookie = useCookie<string | null>('auth_token')
 
-    if (import.meta.client) {
-      const storedToken = localStorage.getItem('token')
-      if (storedToken) return storedToken
+  const getToken = (): string => {
+    let t = tokenCookie.value || ''
+    if (!t && import.meta.client) {
+      t = localStorage.getItem('token') || ''
+      if (t) {
+        tokenCookie.value = t
+      }
     }
-    return ''
+    if (t) {
+      t = t.replace(/^["']|["']$/g, '').trim()
+    }
+    return t
   }
 
   const fetchApi = async <T = unknown>(
@@ -75,25 +81,39 @@ export const useApi = () => {
 
       return { data: res, error: null, status: 200 }
     } catch (err: unknown) {
-      const errorObj = err as { message?: string, response?: { status?: number }, status?: number, statusCode?: number }
+      const errorObj = err as {
+        message?: string
+        status?: number
+        statusCode?: number
+        data?: { error?: string, message?: string }
+        response?: { status?: number, _data?: { error?: string, message?: string } }
+      }
       const status = errorObj?.response?.status || errorObj?.status || errorObj?.statusCode || 500
+      const errMsg = errorObj?.data?.error || errorObj?.data?.message || errorObj?.response?._data?.error || errorObj?.response?._data?.message || errorObj?.message || ''
 
-      if (status === 401 && import.meta.client) {
-        const tokenCookie = useCookie<string | null>('auth_token')
+      const isAuthError = status === 401 || status === 403 || String(errMsg).toLowerCase().includes('authorization') || String(errMsg).toLowerCase().includes('unauthorized')
+
+      // On 401/403 or missing authorization header, clear auth and redirect to login
+      if (isAuthError && import.meta.client) {
         tokenCookie.value = null
         localStorage.removeItem('token')
         localStorage.removeItem('user')
 
-        const router = useRouter()
-        if (router.currentRoute.value.path !== '/login') {
-          router.push('/login')
+        const currentPath = window.location.pathname
+        if (currentPath !== '/login') {
+          window.location.href = '/login'
+          return {
+            data: null,
+            error: new Error('missing authorization header'),
+            status: 401
+          }
         }
       }
 
-      console.warn(`[useApi] Request failed for ${url}:`, errorObj?.message || err)
+      console.warn(`[useApi] Request failed for ${url}:`, errMsg || err)
       return {
         data: null,
-        error: err instanceof Error ? err : new Error(errorObj?.message || 'API request failed'),
+        error: err instanceof Error ? err : new Error(String(errMsg || 'API request failed')),
         status
       }
     }
@@ -102,6 +122,11 @@ export const useApi = () => {
   const getExportUrl = (endpoint: string, params: Record<string, unknown> = {}): string => {
     const fullUrl = buildApiUrl(apiBase, endpoint)
     const query = new URLSearchParams()
+    const token = getToken()
+
+    if (token && !params.token && !params.access_token) {
+      query.append('token', token)
+    }
 
     Object.entries(params).forEach(([key, val]) => {
       if (val !== undefined && val !== null && val !== '') {

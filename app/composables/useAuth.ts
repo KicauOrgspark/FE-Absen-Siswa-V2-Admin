@@ -51,9 +51,7 @@ export function useAuth() {
           'Content-Type': 'application/json'
         },
         body: {
-          username: identifier,
           nisn: identifier,
-          email: identifier,
           password: pass
         }
       })
@@ -61,9 +59,10 @@ export function useAuth() {
       const accessToken = response?.access_token || response?.data?.access_token || response?.token || response?.data?.token
 
       if (accessToken) {
-        token.value = accessToken
+        const cleanToken = String(accessToken).replace(/^["']|["']$/g, '').trim()
+        token.value = cleanToken
         if (import.meta.client) {
-          localStorage.setItem('token', accessToken)
+          localStorage.setItem('token', cleanToken)
         }
 
         const userData = response?.user || response?.data?.user || response?.data

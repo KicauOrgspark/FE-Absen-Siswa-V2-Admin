@@ -17,7 +17,7 @@ const selectedClass = ref('Semua')
 const selectedStatus = ref('Semua')
 
 const currentPage = ref(1)
-const itemsPerPage = 10
+const itemsPerPage = 12
 
 const majorIcons: Record<string, string> = {
   RPL: 'code',

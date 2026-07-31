@@ -24,6 +24,7 @@ const form = reactive({
   class: 'X DKV-1',
   major: 'DKV' as Student['major'],
   grade: 'X' as Student['grade'],
+  role: 'siswa',
   status: 'Belum Absen' as Student['status'],
   activeStatus: 'AKTIF' as Student['activeStatus'],
   alpaCount: 0
@@ -42,6 +43,7 @@ watch(
       form.class = newVal.class
       form.major = newVal.major
       form.grade = newVal.grade
+      form.role = newVal.role || 'siswa'
       form.status = newVal.status
       form.activeStatus = newVal.activeStatus
       form.alpaCount = newVal.alpaCount
@@ -55,6 +57,7 @@ watch(
       form.class = 'X DKV-1'
       form.major = 'DKV'
       form.grade = 'X'
+      form.role = 'siswa'
       form.status = 'Belum Absen'
       form.activeStatus = 'AKTIF'
       form.alpaCount = 0
@@ -87,6 +90,7 @@ const handleSubmit = () => {
     if (form.parentPhone.trim()) payload.parentPhone = form.parentPhone.trim()
     if (form.class.trim()) payload.class = form.class.trim()
     if (form.major) payload.major = form.major
+    if (form.role) payload.role = form.role
     if (form.activeStatus) payload.activeStatus = form.activeStatus
 
     emit('update', props.editStudentData.id, payload)
@@ -339,22 +343,42 @@ const handleSubmit = () => {
                       >
                     </div>
                     <div>
-                      <label class="block font-label text-label-sm text-secondary mb-1">Status Keaktifan</label>
+                      <label class="block font-label text-label-sm text-secondary mb-1">
+                        Role User <span
+                          v-if="!editStudentData"
+                          class="text-rose-500"
+                        >*</span>
+                      </label>
                       <select
-                        v-model="form.activeStatus"
-                        class="w-full px-4 py-2.5 bg-surface-white border border-surface-container-highest rounded-lg text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        v-model="form.role"
+                        class="w-full px-4 py-2.5 bg-surface-white border border-surface-container-highest rounded-lg text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary capitalize font-bold"
                       >
-                        <option value="AKTIF">
-                          AKTIF
+                        <option value="siswa">
+                          siswa (Siswa)
                         </option>
-                        <option value="PKL">
-                          PKL
-                        </option>
-                        <option value="NON AKTIF">
-                          NON AKTIF
+                        <option value="admin">
+                          admin (Admin)
                         </option>
                       </select>
                     </div>
+                  </div>
+
+                  <div>
+                    <label class="block font-label text-label-sm text-secondary mb-1">Status Keaktifan</label>
+                    <select
+                      v-model="form.activeStatus"
+                      class="w-full px-4 py-2.5 bg-surface-white border border-surface-container-highest rounded-lg text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="AKTIF">
+                        AKTIF
+                      </option>
+                      <option value="PKL">
+                        PKL
+                      </option>
+                      <option value="NON AKTIF">
+                        NON AKTIF
+                      </option>
+                    </select>
                   </div>
                 </div>
 

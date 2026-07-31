@@ -7,8 +7,7 @@ const {
   addStudent,
   updateStudent,
   deleteStudent,
-  resetStudentPassword,
-  importUsersExcel
+  resetStudentPassword
 } = useAttendance()
 
 const searchQuery = ref('')
@@ -30,13 +29,8 @@ const resetTargetId = ref('')
 const newPasswordInput = ref('password123')
 const resetSuccessMessage = ref('')
 
-// File upload state for import
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const isImporting = ref(false)
-const importMessage = ref('')
-
 const currentPage = ref(1)
-const itemsPerPage = 10
+const itemsPerPage = 12
 
 onMounted(() => {
   fetchUsers()
@@ -69,7 +63,8 @@ watch([searchQuery, selectedGrade, selectedClass, selectedStatus], () => {
   fetchUsers({
     role: 'siswa',
     class_group: selectedClass.value || undefined,
-    search: searchQuery.value || undefined
+    search: searchQuery.value || undefined,
+    status: selectedStatus.value || undefined
   })
 })
 
@@ -143,33 +138,6 @@ const handleResetPasswordSubmit = async () => {
     }, 1500)
   }
 }
-
-const triggerFileUpload = () => {
-  fileInputRef.value?.click()
-}
-
-const handleFileChange = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  if (!target.files || !target.files[0]) return
-
-  const file = target.files[0]
-  isImporting.value = true
-  importMessage.value = 'Mengimpor file Excel ke server...'
-
-  const res = await importUsersExcel(file)
-  isImporting.value = false
-
-  if (res.status === 200) {
-    importMessage.value = 'Impor data pengguna berhasil!'
-    fetchUsers()
-  } else {
-    importMessage.value = 'Gagal mengimpor file: ' + (res.error?.message || 'Format tidak valid')
-  }
-
-  setTimeout(() => {
-    importMessage.value = ''
-  }, 4000)
-}
 </script>
 
 <template>
@@ -186,26 +154,6 @@ const handleFileChange = async (event: Event) => {
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        <!-- Import Excel Button -->
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept=".xlsx, .xls, .csv"
-          class="hidden"
-          @change="handleFileChange"
-        >
-        <button
-          class="bg-surface-white border border-surface-container-highest text-primary font-label text-label-lg px-4 py-2.5 rounded hover:bg-surface-container-low transition-colors flex items-center gap-2 shadow-sm font-bold active:scale-95"
-          :disabled="isImporting"
-          @click="triggerFileUpload"
-        >
-          <span
-            class="material-symbols-outlined text-[20px]"
-            :class="{ 'animate-spin': isImporting }"
-          >upload_file</span>
-          {{ isImporting ? 'Mengimpor...' : 'Import Excel' }}
-        </button>
-
         <button
           class="bg-primary text-white font-label text-label-lg px-6 py-2.5 rounded hover:bg-primary-container transition-colors flex items-center gap-2 shadow-sm active:scale-95 font-bold"
           @click="openAddModal"
@@ -214,15 +162,6 @@ const handleFileChange = async (event: Event) => {
           Tambah Siswa
         </button>
       </div>
-    </div>
-
-    <!-- Import notification message -->
-    <div
-      v-if="importMessage"
-      class="p-3 bg-primary/10 border border-primary/20 text-primary rounded-lg text-xs font-bold flex items-center gap-2"
-    >
-      <span class="material-symbols-outlined text-sm">info</span>
-      <span>{{ importMessage }}</span>
     </div>
 
     <!-- Table Container -->
@@ -368,9 +307,17 @@ const handleFileChange = async (event: Event) => {
                     {{ student.avatarInitials }}
                   </div>
                   <div>
-                    <p class="font-bold text-on-surface">
-                      {{ student.name }}
-                    </p>
+                    <div class="flex items-center gap-1.5">
+                      <p class="font-bold text-on-surface">
+                        {{ student.name }}
+                      </p>
+                      <span
+                        class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border"
+                        :class="student.role === 'admin' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-600 border-slate-200'"
+                      >
+                        {{ student.role || 'siswa' }}
+                      </span>
+                    </div>
                     <p class="text-xs text-secondary">
                       {{ student.email || '-' }}
                     </p>
