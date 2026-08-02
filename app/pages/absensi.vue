@@ -64,11 +64,11 @@ const filteredStudents = computed(() => {
 })
 
 const paginatedStudents = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  return filteredStudents.value.slice(start, start + itemsPerPage)
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  return filteredStudents.value.slice(start, start + itemsPerPage.value)
 })
 
-const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage) || 1)
+const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1)
 
 const resetFilters = () => {
   searchQuery.value = ''

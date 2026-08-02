@@ -73,11 +73,11 @@ const fetchWithFilters = () => {
 watch([searchQuery, selectedGrade, selectedClass, selectedStatus], fetchWithFilters)
 
 const paginatedStudents = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  return filteredStudents.value.slice(start, start + itemsPerPage)
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  return filteredStudents.value.slice(start, start + itemsPerPage.value)
 })
 
-const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage) || 1)
+const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1)
 
 // Kalau halaman terakhir kosong setelah delete, mundur ke halaman yang valid
 watch(totalPages, (tp) => {
@@ -98,7 +98,6 @@ const resetAllFilters = () => {
 const { showError, showSuccess } = useAppToast()
 
 const modalErrorMessage = ref('')
-const isSubmittingModal = ref('')
 
 const openAddModal = () => {
   selectedStudentToEdit.value = null
