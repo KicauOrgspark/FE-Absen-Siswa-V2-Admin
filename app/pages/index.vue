@@ -35,8 +35,11 @@ onMounted(async () => {
 })
 
 watch([selectedGrade, selectedClass], () => {
+  const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
+  fetchDashboardStats({ angkatan: angkatanVal })
+  fetchDashboardTrend({ angkatan: angkatanVal })
   fetchAttendanceStudents({
-    angkatan: selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined,
+    angkatan: angkatanVal,
     class_group: selectedClass.value !== 'Semua Kelas' ? selectedClass.value : undefined
   })
 })

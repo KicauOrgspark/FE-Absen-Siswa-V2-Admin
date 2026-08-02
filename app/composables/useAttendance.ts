@@ -155,22 +155,53 @@ export const useAttendance = () => {
     return (first + last).toUpperCase()
   }
 
-  const fetchDashboardStats = async () => {
-    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/dashboard')
+  const totalStudentsCount = useState<number>('totalStudentsCount', () => 0)
+
+  const extractTotalFromResponse = (resData: unknown): number => {
+    if (!resData || typeof resData !== 'object') return 0
+    const obj = resData as Record<string, unknown>
+
+    if (obj.data && typeof obj.data === 'object') {
+      const subObj = obj.data as Record<string, unknown>
+      if (typeof subObj.total === 'number' && subObj.total > 0) return subObj.total
+      if (typeof subObj.count === 'number' && subObj.count > 0) return subObj.count
+      if (typeof subObj.total_siswa === 'number' && subObj.total_siswa > 0) return subObj.total_siswa
+    }
+
+    const meta = obj.meta as Record<string, unknown> | undefined
+    if (typeof meta?.total === 'number' && meta.total > 0) return meta.total
+
+    if (typeof obj.total === 'number' && obj.total > 0) return obj.total
+    if (typeof obj.total_siswa === 'number' && obj.total_siswa > 0) return obj.total_siswa
+    if (typeof obj.total_students === 'number' && obj.total_students > 0) return obj.total_students
+    if (typeof obj.count === 'number' && obj.count > 0) return obj.count
+    return 0
+  }
+
+  const fetchDashboardStats = async (filters?: { angkatan?: string }) => {
+    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/dashboard', {
+      params: { angkatan: filters?.angkatan }
+    })
     if (data) {
+      const serverTotalSiswa = Number(data.total_siswa ?? data.total_students ?? data.total_user ?? 0)
+      if (serverTotalSiswa > 0) {
+        totalStudentsCount.value = serverTotalSiswa
+      }
       dashboardMetrics.value = {
-        totalStudents: Number(data.total_siswa ?? data.total_students ?? dashboardMetrics.value.totalStudents),
+        totalStudents: serverTotalSiswa || dashboardMetrics.value.totalStudents,
         totalAbsenHariIni: Number(data.total_absen_hari_ini ?? data.total_absen ?? 0),
-        hadirCount: Number(data.hadir_count ?? data.hadir ?? 0),
-        sakitCount: Number(data.sakit_count ?? data.sakit ?? 0),
-        alpaCount: Number(data.alpa_count ?? data.alpa ?? 0),
+        hadirCount: Number(data.hadir_count ?? data.hadir ?? data.total_hadir_hari_ini ?? 0),
+        sakitCount: Number(data.sakit_count ?? data.sakit ?? data.total_sakit_hari_ini ?? 0),
+        alpaCount: Number(data.alpa_count ?? data.alpa ?? data.total_alfa_hari_ini ?? 0),
         izinCount: Number(data.izin_count ?? data.izin ?? 0)
       }
     }
   }
 
-  const fetchDashboardTrend = async () => {
-    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/dashboard/trend')
+  const fetchDashboardTrend = async (filters?: { angkatan?: string }) => {
+    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/dashboard/trend', {
+      params: { angkatan: filters?.angkatan }
+    })
     if (data) {
       trendData.value = {
         labels: (data.labels as string[]) || trendData.value.labels,
@@ -183,16 +214,27 @@ export const useAttendance = () => {
   const fetchAttendanceStudents = async (filters?: { class_group?: string, status?: string, angkatan?: string, jurusan?: string }) => {
     isFetching.value = true
 
-    // 1. Fetch users (students) list
+    // 1. Fetch users (students) list with limit: 100 (matches server limit threshold)
     const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
-      params: { limit: 100, role: 'siswa', class_group: filters?.class_group }
+      params: { limit: 100, role: 'siswa', class_group: filters?.class_group, angkatan: filters?.angkatan }
     })
     let userList = extractList(usersData)
+    const serverTotal = extractTotalFromResponse(usersData)
+    if (serverTotal > 0) {
+      totalStudentsCount.value = serverTotal
+    } else if (userList.length > 0) {
+      totalStudentsCount.value = userList.length
+    }
+
     if (!userList.length) {
       const { data: fallbackData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
-        params: { limit: 100, class_group: filters?.class_group }
+        params: { limit: 100, class_group: filters?.class_group, angkatan: filters?.angkatan }
       })
       userList = extractList(fallbackData)
+      const fallbackTotal = extractTotalFromResponse(fallbackData)
+      if (fallbackTotal > 0) {
+        totalStudentsCount.value = fallbackTotal
+      }
     }
 
     // 2. Fetch today's attendance logs from BE
@@ -296,20 +338,27 @@ export const useAttendance = () => {
     return { success: false, message: 'Siswa tidak ditemukan.' }
   }
 
-  const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string, status?: string } = {}) => {
+  const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string, status?: string, angkatan?: string } = {}) => {
     isFetching.value = true
     const { data } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
       params: {
         page: params.page || 1,
-        limit: params.limit || 1500,
+        limit: params.limit || 100,
         role: params.role || 'siswa',
         class_group: params.class_group,
+        angkatan: params.angkatan,
         search: params.search,
         status: params.status
       }
     })
 
     let list = extractList(data)
+    const serverTotal = extractTotalFromResponse(data)
+    if (serverTotal > 0) {
+      totalStudentsCount.value = serverTotal
+    } else if (list.length > 0) {
+      totalStudentsCount.value = list.length
+    }
 
     // Fallback: If filtering by role='siswa' returns empty, retry without role filter to get DB users
     if (!list.length) {
@@ -318,10 +367,15 @@ export const useAttendance = () => {
           page: params.page || 1,
           limit: params.limit || 100,
           class_group: params.class_group,
+          angkatan: params.angkatan,
           search: params.search
         }
       })
       list = extractList(fallbackData)
+      const fallbackTotal = extractTotalFromResponse(fallbackData)
+      if (fallbackTotal > 0) {
+        totalStudentsCount.value = fallbackTotal
+      }
     }
     isFetching.value = false
 
@@ -452,7 +506,7 @@ export const useAttendance = () => {
     const alpa = students.value.filter(s => s.status?.toLowerCase() === 'alpa' || s.status?.toLowerCase() === 'alfa').length
 
     return {
-      totalStudents: dashboardMetrics.value.totalStudents || students.value.length,
+      totalStudents: dashboardMetrics.value.totalStudents || totalStudentsCount.value || students.value.length,
       totalAbsenHariIni: dashboardMetrics.value.totalAbsenHariIni || totalAbsenHariIni,
       hadirCount: dashboardMetrics.value.hadirCount || hadir,
       sakitCount: dashboardMetrics.value.sakitCount || sakit,

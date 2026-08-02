@@ -64,6 +64,7 @@ const fetchWithFilters = () => {
   fetchUsers({
     role: 'siswa',
     class_group: selectedClass.value || undefined,
+    angkatan: selectedGrade.value || undefined,
     search: searchQuery.value || undefined,
     status: selectedStatus.value || undefined
   })

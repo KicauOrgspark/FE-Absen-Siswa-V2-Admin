@@ -42,13 +42,14 @@ onMounted(async () => {
 
 const applyFilters = () => {
   fetchAttendanceStudents({
+    angkatan: selectedYear.value !== 'Semua' ? selectedYear.value : undefined,
     jurusan: selectedMajor.value !== 'Semua' ? selectedMajor.value : undefined,
     class_group: selectedClass.value !== 'Semua' ? selectedClass.value : undefined,
     status: selectedStatus.value !== 'Semua' ? selectedStatus.value : undefined
   })
 }
 
-watch([selectedMajor, selectedClass, selectedStatus], () => {
+watch([selectedYear, selectedMajor, selectedClass, selectedStatus], () => {
   currentPage.value = 1
   applyFilters()
 })
@@ -56,10 +57,11 @@ watch([selectedMajor, selectedClass, selectedStatus], () => {
 const filteredStudents = computed(() => {
   return students.value.filter((s) => {
     const matchesSearch = !searchQuery.value || s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || s.nisn.includes(searchQuery.value)
+    const matchesYear = selectedYear.value === 'Semua' || s.grade === selectedYear.value
     const matchesMajor = selectedMajor.value === 'Semua' || s.major === selectedMajor.value
     const matchesClass = selectedClass.value === 'Semua' || s.class === selectedClass.value
     const matchesStatus = selectedStatus.value === 'Semua' || s.status === selectedStatus.value
-    return matchesSearch && matchesMajor && matchesClass && matchesStatus
+    return matchesSearch && matchesYear && matchesMajor && matchesClass && matchesStatus
   })
 })
 

@@ -100,12 +100,14 @@ const { showError, showSuccess, showInfo } = useAppToast()
 const exportToExcel = async () => {
   isExporting.value = true
   showInfo('Memulai penyiapan file laporan Excel...')
-  const kelas = selectedGrade.value !== 'Grade X' ? selectedGrade.value : 'X-RPL-1'
-  const jurusan = selectedMajor.value !== 'All Majors' ? selectedMajor.value : 'RPL'
+  const angkatan = selectedGrade.value !== 'Semua' && selectedGrade.value !== 'All Grades' ? selectedGrade.value : undefined
+  const kelas = selectedGrade.value !== 'Grade X' && selectedGrade.value !== 'Semua' ? selectedGrade.value : undefined
+  const jurusan = selectedMajor.value !== 'All Majors' && selectedMajor.value !== 'Semua' ? selectedMajor.value : undefined
 
   const { getToken } = useApi()
   const token = getToken()
   const exportUrl = getExportUrl('/api/v1/export/attendance', {
+    angkatan,
     kelas,
     jurusan,
     start_date: fromDate.value,
