@@ -301,7 +301,7 @@ export const useAttendance = () => {
     const { data } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
       params: {
         page: params.page || 1,
-        limit: params.limit || 100,
+        limit: params.limit || 1500,
         role: params.role || 'siswa',
         class_group: params.class_group,
         search: params.search,
