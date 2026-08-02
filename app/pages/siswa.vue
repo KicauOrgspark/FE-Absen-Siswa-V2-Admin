@@ -3,6 +3,9 @@ import type { Student } from '~/composables/useAttendance'
 
 const {
   students,
+  availableClasses,
+  pagination,
+  fetchClassesList,
   fetchUsers,
   addStudent,
   updateStudent,
@@ -32,37 +35,18 @@ const resetSuccessMessage = ref('')
 const deleteErrorMessage = ref('')
 
 const currentPage = ref(1)
-const itemsPerPage = ref(100)
+const itemsPerPage = ref(50)
 
 onMounted(() => {
-  fetchUsers()
-})
-
-// Enhanced search engine & multi-field filter
-const filteredStudents = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  return students.value.filter((s) => {
-    const matchesSearch = !q
-      || s.name.toLowerCase().includes(q)
-      || s.nisn.toLowerCase().includes(q)
-      || (s.username && s.username.toLowerCase().includes(q))
-      || (s.email && s.email.toLowerCase().includes(q))
-      || (s.parentPhone && s.parentPhone.toLowerCase().includes(q))
-      || s.class.toLowerCase().includes(q)
-      || s.major.toLowerCase().includes(q)
-
-    const matchesGrade = !selectedGrade.value || s.grade === selectedGrade.value
-    const matchesClass = !selectedClass.value || s.class === selectedClass.value
-    const matchesStatus = !selectedStatus.value || s.activeStatus === selectedStatus.value
-
-    return matchesSearch && matchesGrade && matchesClass && matchesStatus
-  })
+  fetchClassesList()
+  fetchWithFilters()
 })
 
 const fetchWithFilters = () => {
-  currentPage.value = 1
   fetchUsers({
     role: 'siswa',
+    page: currentPage.value,
+    limit: itemsPerPage.value,
     class_group: selectedClass.value || undefined,
     angkatan: selectedGrade.value || undefined,
     search: searchQuery.value || undefined,
@@ -70,20 +54,18 @@ const fetchWithFilters = () => {
   })
 }
 
-// Reset to page 1 whenever any filter changes
-watch([searchQuery, selectedGrade, selectedClass, selectedStatus], fetchWithFilters)
-
-const paginatedStudents = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value
-  return filteredStudents.value.slice(start, start + itemsPerPage.value)
+// Reset ke halaman 1 saat filter / limit berubah
+watch([searchQuery, selectedGrade, selectedClass, selectedStatus, itemsPerPage], () => {
+  currentPage.value = 1
 })
 
-const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1)
+// Refetch dari API (server-side pagination & filter) saat page, filter, search, atau limit berubah
+watch([searchQuery, selectedGrade, selectedClass, selectedStatus, currentPage, itemsPerPage], fetchWithFilters)
 
-// Kalau halaman terakhir kosong setelah delete, mundur ke halaman yang valid
-watch(totalPages, (tp) => {
+// Kalau total halaman mengecil (setelah delete/filter), mundur ke halaman yang valid
+watch(() => pagination.value.totalPages, (tp) => {
   if (currentPage.value > tp) {
-    currentPage.value = tp
+    currentPage.value = Math.max(1, tp)
   }
 })
 
@@ -92,8 +74,6 @@ const resetAllFilters = () => {
   selectedGrade.value = ''
   selectedClass.value = ''
   selectedStatus.value = ''
-  currentPage.value = 1
-  fetchUsers()
 }
 
 const { showError, showSuccess } = useAppToast()
@@ -118,6 +98,7 @@ const handleSaveStudent = async (data: Omit<Student, 'id' | 'avatarInitials'>) =
   if (res.success) {
     isModalOpen.value = false
     showSuccess('Siswa baru berhasil ditambahkan!')
+    fetchWithFilters()
   } else {
     modalErrorMessage.value = res.message || 'Gagal menambahkan data siswa. Periksa isian form.'
   }
@@ -129,6 +110,7 @@ const handleUpdateStudent = async (id: string, data: Partial<Student>) => {
   if (res.success) {
     isModalOpen.value = false
     showSuccess('Data siswa berhasil diperbarui!')
+    fetchWithFilters()
   } else {
     modalErrorMessage.value = res.message || 'Gagal mengupdate data siswa.'
   }
@@ -149,12 +131,7 @@ const confirmDelete = async () => {
     showError(errMsg)
   } else {
     showSuccess(`Data siswa ${deleteTargetName.value} berhasil dihapus!`)
-    fetchUsers({
-      role: 'siswa',
-      class_group: selectedClass.value || undefined,
-      search: searchQuery.value || undefined,
-      status: selectedStatus.value || undefined
-    })
+    fetchWithFilters()
   }
   isDeleteDialogOpen.value = false
   deleteTargetId.value = ''
@@ -283,17 +260,12 @@ const handleResetPasswordSubmit = async () => {
               <option value="">
                 Semua Kelas
               </option>
-              <option value="X DKV-1">
-                X DKV-1
-              </option>
-              <option value="X RPL 1">
-                X RPL 1
-              </option>
-              <option value="XI TKJ 2">
-                XI TKJ 2
-              </option>
-              <option value="XII TOI 1">
-                XII TOI 1
+              <option
+                v-for="cls in availableClasses"
+                :key="cls.id || cls.name || cls"
+                :value="cls.name || cls.class_name || cls"
+              >
+                {{ cls.name || cls.class_name || cls }}
               </option>
             </select>
             <span class="absolute right-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm pointer-events-none">expand_more</span>
@@ -361,7 +333,7 @@ const handleResetPasswordSubmit = async () => {
           </thead>
           <tbody class="divide-y divide-surface-container-highest text-body-md text-deep-black">
             <tr
-              v-for="student in paginatedStudents"
+              v-for="student in students"
               :key="student.id"
               class="hover:bg-surface-container-low transition-colors"
             >
@@ -443,7 +415,7 @@ const handleResetPasswordSubmit = async () => {
                 </div>
               </td>
             </tr>
-            <tr v-if="!paginatedStudents.length">
+            <tr v-if="!students.length">
               <td
                 colspan="6"
                 class="p-8 text-center text-secondary"
@@ -459,7 +431,7 @@ const handleResetPasswordSubmit = async () => {
       <div class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary">
         <div class="flex flex-wrap items-center gap-4">
           <span>
-            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }} siswa
+            Menampilkan {{ students.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, pagination.total) }} dari {{ pagination.total }} siswa
           </span>
           <div class="flex items-center gap-2">
             <span class="text-xs font-label">Tampilkan:</span>
@@ -474,13 +446,7 @@ const handleResetPasswordSubmit = async () => {
                 25
               </option>
               <option :value="50">
-                50
-              </option>
-              <option :value="100">
-                100 (Default)
-              </option>
-              <option :value="filteredStudents.length || 100">
-                Max Data DB ({{ filteredStudents.length }})
+                50 (Default)
               </option>
             </select>
           </div>
@@ -493,10 +459,10 @@ const handleResetPasswordSubmit = async () => {
           >
             <span class="material-symbols-outlined text-[18px]">chevron_left</span>
           </button>
-          <span class="px-3 font-bold text-on-surface">{{ currentPage }} / {{ totalPages }}</span>
+          <span class="px-3 font-bold text-on-surface">{{ currentPage }} / {{ pagination.totalPages }}</span>
           <button
             class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-50"
-            :disabled="currentPage >= totalPages"
+            :disabled="currentPage >= pagination.totalPages"
             @click="currentPage++"
           >
             <span class="material-symbols-outlined text-[18px]">chevron_right</span>

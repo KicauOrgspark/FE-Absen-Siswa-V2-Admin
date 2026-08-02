@@ -157,6 +157,13 @@ export const useAttendance = () => {
 
   const totalStudentsCount = useState<number>('totalStudentsCount', () => 0)
 
+  const paginationMeta = useState<{ page: number, limit: number, total: number, totalPages: number }>('paginationMeta', () => ({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 1
+  }))
+
   const extractTotalFromResponse = (resData: unknown): number => {
     if (!resData || typeof resData !== 'object') return 0
     const obj = resData as Record<string, unknown>
@@ -176,6 +183,35 @@ export const useAttendance = () => {
     if (typeof obj.total_students === 'number' && obj.total_students > 0) return obj.total_students
     if (typeof obj.count === 'number' && obj.count > 0) return obj.count
     return 0
+  }
+
+  const extractTotalPagesFromResponse = (resData: unknown): number => {
+    if (!resData || typeof resData !== 'object') return 0
+    const obj = resData as Record<string, unknown>
+
+    if (obj.data && typeof obj.data === 'object') {
+      const subObj = obj.data as Record<string, unknown>
+      const tp = Number(subObj.totalPages ?? subObj.total_pages ?? subObj.pages ?? 0)
+      if (tp > 0) return tp
+    }
+
+    const meta = obj.meta as Record<string, unknown> | undefined
+    const metaTp = Number(meta?.totalPages ?? meta?.total_pages ?? meta?.pages ?? 0)
+    if (metaTp > 0) return metaTp
+
+    const objTp = Number(obj.totalPages ?? obj.total_pages ?? obj.pages ?? 0)
+    if (objTp > 0) return objTp
+    return 0
+  }
+
+  const applyPaginationMeta = (resData: unknown, page: number, limit: number, fallbackTotal: number) => {
+    const total = extractTotalFromResponse(resData) || fallbackTotal || paginationMeta.value.total
+    const totalPages = extractTotalPagesFromResponse(resData)
+      || Math.max(1, Math.ceil(total / Math.max(1, limit)))
+    paginationMeta.value = { page, limit, total, totalPages }
+    if (total > 0) {
+      totalStudentsCount.value = total
+    }
   }
 
   const fetchDashboardStats = async (filters?: { angkatan?: string }) => {
@@ -211,12 +247,14 @@ export const useAttendance = () => {
     }
   }
 
-  const fetchAttendanceStudents = async (filters?: { class_group?: string, status?: string, angkatan?: string, jurusan?: string }) => {
+  const fetchAttendanceStudents = async (filters?: { class_group?: string, status?: string, angkatan?: string, jurusan?: string, search?: string, page?: number, limit?: number }) => {
     isFetching.value = true
 
-    // 1. Fetch users (students) list with limit: 100 (matches server limit threshold)
+    // 1. Fetch users (students) list with configurable page & limit (set from frontend)
+    const page = filters?.page || 1
+    const limit = filters?.limit ?? 50
     const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
-      params: { limit: 100, role: 'siswa', class_group: filters?.class_group, angkatan: filters?.angkatan }
+      params: { page, limit, role: 'siswa', class_group: filters?.class_group, angkatan: filters?.angkatan, search: filters?.search }
     })
     let userList = extractList(usersData)
     const serverTotal = extractTotalFromResponse(usersData)
@@ -228,7 +266,7 @@ export const useAttendance = () => {
 
     if (!userList.length) {
       const { data: fallbackData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
-        params: { limit: 100, class_group: filters?.class_group, angkatan: filters?.angkatan }
+        params: { page, limit, class_group: filters?.class_group, angkatan: filters?.angkatan, search: filters?.search }
       })
       userList = extractList(fallbackData)
       const fallbackTotal = extractTotalFromResponse(fallbackData)
@@ -237,10 +275,12 @@ export const useAttendance = () => {
       }
     }
 
-    // 2. Fetch today's attendance logs from BE
+    applyPaginationMeta(usersData, page, limit, userList.length)
+
+    // 2. Fetch today's attendance logs from BE (limit besar agar status semua siswa cocok antar halaman)
     const todayStr = new Date().toISOString().split('T')[0]
     const { data: logsData } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
-      params: { start_date: todayStr, end_date: todayStr, limit: 100 }
+      params: { start_date: todayStr, end_date: todayStr, limit: 2000 }
     })
 
     const logs = extractList(logsData)
@@ -340,10 +380,12 @@ export const useAttendance = () => {
 
   const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string, status?: string, angkatan?: string } = {}) => {
     isFetching.value = true
+    const page = params.page || 1
+    const limit = params.limit || 50
     const { data } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
       params: {
-        page: params.page || 1,
-        limit: params.limit || 100,
+        page,
+        limit,
         role: params.role || 'siswa',
         class_group: params.class_group,
         angkatan: params.angkatan,
@@ -364,8 +406,8 @@ export const useAttendance = () => {
     if (!list.length) {
       const { data: fallbackData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
         params: {
-          page: params.page || 1,
-          limit: params.limit || 100,
+          page,
+          limit,
           class_group: params.class_group,
           angkatan: params.angkatan,
           search: params.search
@@ -378,6 +420,8 @@ export const useAttendance = () => {
       }
     }
     isFetching.value = false
+
+    applyPaginationMeta(data, page, limit, list.length)
 
     students.value = list.map((u: Record<string, unknown>) => {
       const cls = String(u.class_group || u.class || 'X DKV-1')
@@ -421,7 +465,6 @@ export const useAttendance = () => {
     })
 
     if (data) {
-      await fetchUsers()
       return { success: true }
     } else {
       return { success: false, message: error?.message || 'Gagal menambahkan siswa.' }
@@ -446,7 +489,6 @@ export const useAttendance = () => {
     })
 
     if (data) {
-      await fetchUsers()
       return { success: true }
     } else {
       return { success: false, message: error?.message || 'Gagal mengupdate data siswa.' }
@@ -474,7 +516,6 @@ export const useAttendance = () => {
 
     if (isSuccess) {
       students.value = students.value.filter(s => s.id !== id)
-      await fetchUsers()
     } else {
       console.warn('[deleteStudent] Gagal menghapus user:', error?.message || status)
     }
@@ -562,6 +603,8 @@ export const useAttendance = () => {
     stats,
     departmentStats,
     topAbsents,
+    totalStudentsCount,
+    pagination: paginationMeta,
     fetchDashboardStats,
     fetchDashboardTrend,
     fetchAttendanceStudents,

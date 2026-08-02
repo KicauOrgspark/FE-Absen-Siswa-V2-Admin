@@ -3,6 +3,7 @@ const {
   students,
   stats,
   availableClasses,
+  pagination,
   fetchDashboardStats,
   fetchDashboardTrend,
   fetchAttendanceStudents,
@@ -18,19 +19,31 @@ const selectedGrade = ref('Semua Angkatan')
 const selectedClass = ref('Semua Kelas')
 
 const currentPage = ref(1)
-const itemsPerPage = ref(100)
+const itemsPerPage = ref(50)
 
 const formattedDate = computed(() => {
   const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
   return new Date().toLocaleDateString('id-ID', options)
 })
 
+// Fetch data dari API (server-side pagination & filter)
+const fetchTableData = () => {
+  const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
+  fetchAttendanceStudents({
+    angkatan: angkatanVal,
+    class_group: selectedClass.value !== 'Semua Kelas' ? selectedClass.value : undefined,
+    search: searchQuery.value || undefined,
+    page: currentPage.value,
+    limit: itemsPerPage.value
+  })
+}
+
 onMounted(async () => {
   await Promise.all([
     fetchDashboardStats(),
     fetchDashboardTrend(),
     fetchClassesList(),
-    fetchAttendanceStudents()
+    fetchTableData()
   ])
 })
 
@@ -38,35 +51,18 @@ watch([selectedGrade, selectedClass], () => {
   const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
   fetchDashboardStats({ angkatan: angkatanVal })
   fetchDashboardTrend({ angkatan: angkatanVal })
-  fetchAttendanceStudents({
-    angkatan: angkatanVal,
-    class_group: selectedClass.value !== 'Semua Kelas' ? selectedClass.value : undefined
-  })
 })
 
-const filteredStudents = computed(() => {
-  return students.value.filter((student) => {
-    const matchesSearch = !searchQuery.value
-      || student.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-      || student.nisn.includes(searchQuery.value)
-    const matchesGrade = selectedGrade.value === 'Semua Angkatan' || student.grade === selectedGrade.value
-    const matchesClass = selectedClass.value === 'Semua Kelas' || student.class === selectedClass.value
-    return matchesSearch && matchesGrade && matchesClass
-  })
-})
-
+// Reset ke halaman 1 saat kriteria pencarian / limit berubah
 watch([searchQuery, selectedGrade, selectedClass, itemsPerPage], () => {
   currentPage.value = 1
 })
 
-const paginatedStudents = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value
-  return filteredStudents.value.slice(start, start + itemsPerPage.value)
-})
+// Refetch dari API saat page, filter, search, atau limit berubah
+watch([searchQuery, selectedGrade, selectedClass, currentPage, itemsPerPage], fetchTableData)
 
-const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1)
-
-watch(totalPages, (tp) => {
+// Kalau total halaman mengecil (setelah filter/hapus), mundur ke halaman valid
+watch(() => pagination.value.totalPages, (tp) => {
   if (currentPage.value > tp) {
     currentPage.value = Math.max(1, tp)
   }
@@ -190,18 +186,6 @@ const handleStatusChange = async (studentId: string, status: string, studentName
               >
                 {{ cls.name || cls.class_name || cls }}
               </option>
-              <option value="X DKV-1">
-                X DKV-1
-              </option>
-              <option value="X RPL 1">
-                X RPL 1
-              </option>
-              <option value="XI TKJ 2">
-                XI TKJ 2
-              </option>
-              <option value="XII TOI 1">
-                XII TOI 1
-              </option>
             </select>
             <span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm pointer-events-none">expand_more</span>
           </div>
@@ -241,7 +225,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
           </thead>
           <tbody class="divide-y divide-surface-container-highest text-body-md text-deep-black">
             <tr
-              v-for="student in paginatedStudents"
+              v-for="student in students"
               :key="student.id"
               class="hover:bg-surface-container-low transition-colors"
             >
@@ -278,7 +262,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
                 />
               </td>
             </tr>
-            <tr v-if="!paginatedStudents.length">
+            <tr v-if="!students.length">
               <td
                 colspan="7"
                 class="p-8 text-center text-secondary"
@@ -294,7 +278,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
       <div class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary">
         <div class="flex flex-wrap items-center gap-4">
           <span>
-            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }} siswa
+            Menampilkan {{ students.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, pagination.total) }} dari {{ pagination.total }} siswa
           </span>
           <div class="flex items-center gap-2">
             <span class="text-xs font-label">Tampilkan:</span>
@@ -309,13 +293,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
                 25
               </option>
               <option :value="50">
-                50
-              </option>
-              <option :value="100">
-                100 (Default)
-              </option>
-              <option :value="filteredStudents.length || 100">
-                Max Data DB ({{ filteredStudents.length }})
+                50 (Default)
               </option>
             </select>
           </div>
@@ -338,11 +316,11 @@ const handleStatusChange = async (studentId: string, status: string, studentName
             <span class="material-symbols-outlined text-[18px]">chevron_left</span>
           </button>
           <span class="px-3 font-bold text-deep-black text-sm">
-            {{ currentPage }} / {{ totalPages }}
+            {{ currentPage }} / {{ pagination.totalPages }}
           </span>
           <button
             class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            :disabled="currentPage >= totalPages"
+            :disabled="currentPage >= pagination.totalPages"
             title="Halaman Berikutnya"
             @click="currentPage++"
           >
@@ -350,9 +328,9 @@ const handleStatusChange = async (studentId: string, status: string, studentName
           </button>
           <button
             class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            :disabled="currentPage >= totalPages"
+            :disabled="currentPage >= pagination.totalPages"
             title="Halaman Terakhir"
-            @click="currentPage = totalPages"
+            @click="currentPage = pagination.totalPages"
           >
             <span class="material-symbols-outlined text-[18px]">last_page</span>
           </button>

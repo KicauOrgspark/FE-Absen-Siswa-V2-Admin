@@ -17,7 +17,7 @@ const selectedClass = ref('Semua')
 const selectedStatus = ref('Semua')
 
 const currentPage = ref(1)
-const itemsPerPage = ref(100)
+const itemsPerPage = ref(50)
 
 const majorIcons: Record<string, string> = {
   RPL: 'code',
@@ -370,13 +370,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
                 25
               </option>
               <option :value="50">
-                50
-              </option>
-              <option :value="100">
-                100 (Default)
-              </option>
-              <option :value="filteredStudents.length || 100">
-                Max Data DB ({{ filteredStudents.length }})
+                50 (Default)
               </option>
             </select>
           </div>
