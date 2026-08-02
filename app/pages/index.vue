@@ -17,6 +17,9 @@ const searchQuery = ref('')
 const selectedGrade = ref('Semua Angkatan')
 const selectedClass = ref('Semua Kelas')
 
+const currentPage = ref(1)
+const itemsPerPage = ref(100)
+
 const formattedDate = computed(() => {
   const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
   return new Date().toLocaleDateString('id-ID', options)
@@ -47,6 +50,23 @@ const filteredStudents = computed(() => {
     const matchesClass = selectedClass.value === 'Semua Kelas' || student.class === selectedClass.value
     return matchesSearch && matchesGrade && matchesClass
   })
+})
+
+watch([searchQuery, selectedGrade, selectedClass, itemsPerPage], () => {
+  currentPage.value = 1
+})
+
+const paginatedStudents = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  return filteredStudents.value.slice(start, start + itemsPerPage.value)
+})
+
+const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1)
+
+watch(totalPages, (tp) => {
+  if (currentPage.value > tp) {
+    currentPage.value = Math.max(1, tp)
+  }
 })
 
 const { showError, showSuccess } = useAppToast()
@@ -218,7 +238,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
           </thead>
           <tbody class="divide-y divide-surface-container-highest text-body-md text-deep-black">
             <tr
-              v-for="student in filteredStudents"
+              v-for="student in paginatedStudents"
               :key="student.id"
               class="hover:bg-surface-container-low transition-colors"
             >
@@ -255,7 +275,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
                 />
               </td>
             </tr>
-            <tr v-if="!filteredStudents.length">
+            <tr v-if="!paginatedStudents.length">
               <td
                 colspan="7"
                 class="p-8 text-center text-secondary"
@@ -265,6 +285,75 @@ const handleStatusChange = async (studentId: string, status: string, studentName
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination Footer -->
+      <div class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary">
+        <div class="flex flex-wrap items-center gap-4">
+          <span>
+            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }} siswa
+          </span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-label">Tampilkan:</span>
+            <select
+              v-model="itemsPerPage"
+              class="px-2 py-1 border border-surface-container-highest rounded text-xs text-deep-black bg-surface-white focus:outline-none focus:border-primary font-bold"
+            >
+              <option :value="10">
+                10
+              </option>
+              <option :value="25">
+                25
+              </option>
+              <option :value="50">
+                50
+              </option>
+              <option :value="100">
+                100 (Default)
+              </option>
+              <option :value="filteredStudents.length || 100">
+                Max Data DB ({{ filteredStudents.length }})
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="flex gap-1 items-center">
+          <button
+            class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            :disabled="currentPage === 1"
+            title="Halaman Pertama"
+            @click="currentPage = 1"
+          >
+            <span class="material-symbols-outlined text-[18px]">first_page</span>
+          </button>
+          <button
+            class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            :disabled="currentPage === 1"
+            title="Halaman Sebelumnya"
+            @click="currentPage--"
+          >
+            <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+          </button>
+          <span class="px-3 font-bold text-deep-black text-sm">
+            {{ currentPage }} / {{ totalPages }}
+          </span>
+          <button
+            class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            :disabled="currentPage >= totalPages"
+            title="Halaman Berikutnya"
+            @click="currentPage++"
+          >
+            <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+          </button>
+          <button
+            class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            :disabled="currentPage >= totalPages"
+            title="Halaman Terakhir"
+            @click="currentPage = totalPages"
+          >
+            <span class="material-symbols-outlined text-[18px]">last_page</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

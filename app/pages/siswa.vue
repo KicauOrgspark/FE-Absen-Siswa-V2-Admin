@@ -32,7 +32,7 @@ const resetSuccessMessage = ref('')
 const deleteErrorMessage = ref('')
 
 const currentPage = ref(1)
-const itemsPerPage = 12
+const itemsPerPage = ref(100)
 
 onMounted(() => {
   fetchUsers()
@@ -456,9 +456,34 @@ const handleResetPasswordSubmit = async () => {
       </div>
 
       <!-- Pagination -->
-      <div class="p-4 border-t border-surface-container-highest flex items-center justify-between text-body-md text-secondary">
-        <div>
-          Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }} siswa
+      <div class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary">
+        <div class="flex flex-wrap items-center gap-4">
+          <span>
+            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }} siswa
+          </span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-label">Tampilkan:</span>
+            <select
+              v-model="itemsPerPage"
+              class="px-2 py-1 border border-surface-container-highest rounded text-xs text-deep-black bg-surface-white focus:outline-none focus:border-primary font-bold"
+            >
+              <option :value="10">
+                10
+              </option>
+              <option :value="25">
+                25
+              </option>
+              <option :value="50">
+                50
+              </option>
+              <option :value="100">
+                100 (Default)
+              </option>
+              <option :value="filteredStudents.length || 100">
+                Max Data DB ({{ filteredStudents.length }})
+              </option>
+            </select>
+          </div>
         </div>
         <div class="flex gap-1 items-center">
           <button
