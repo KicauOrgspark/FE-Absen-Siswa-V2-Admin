@@ -95,22 +95,43 @@ const resetAllFilters = () => {
   fetchUsers()
 }
 
+const { showError, showSuccess } = useAppToast()
+
+const modalErrorMessage = ref('')
+const isSubmittingModal = ref('')
+
 const openAddModal = () => {
   selectedStudentToEdit.value = null
+  modalErrorMessage.value = ''
   isModalOpen.value = true
 }
 
 const openEditModal = (student: Student) => {
   selectedStudentToEdit.value = student
+  modalErrorMessage.value = ''
   isModalOpen.value = true
 }
 
-const handleSaveStudent = (data: Omit<Student, 'id' | 'avatarInitials'>) => {
-  addStudent(data)
+const handleSaveStudent = async (data: Omit<Student, 'id' | 'avatarInitials'>) => {
+  modalErrorMessage.value = ''
+  const res = await addStudent(data)
+  if (res.success) {
+    isModalOpen.value = false
+    showSuccess('Siswa baru berhasil ditambahkan!')
+  } else {
+    modalErrorMessage.value = res.message || 'Gagal menambahkan data siswa. Periksa isian form.'
+  }
 }
 
-const handleUpdateStudent = (id: string, data: Partial<Student>) => {
-  updateStudent(id, data)
+const handleUpdateStudent = async (id: string, data: Partial<Student>) => {
+  modalErrorMessage.value = ''
+  const res = await updateStudent(id, data)
+  if (res.success) {
+    isModalOpen.value = false
+    showSuccess('Data siswa berhasil diperbarui!')
+  } else {
+    modalErrorMessage.value = res.message || 'Gagal mengupdate data siswa.'
+  }
 }
 
 const handleDelete = (id: string, name: string) => {
@@ -123,8 +144,11 @@ const confirmDelete = async () => {
   deleteErrorMessage.value = ''
   const res = await deleteStudent(deleteTargetId.value)
   if (res.error) {
-    deleteErrorMessage.value = res.error.message || 'Gagal menghapus siswa. Coba lagi.'
+    const errMsg = res.error.message || 'Gagal menghapus siswa. Coba lagi.'
+    deleteErrorMessage.value = errMsg
+    showError(errMsg)
   } else {
+    showSuccess(`Data siswa ${deleteTargetName.value} berhasil dihapus!`)
     fetchUsers({
       role: 'siswa',
       class_group: selectedClass.value || undefined,
@@ -153,11 +177,14 @@ const openResetPasswordModal = (id: string) => {
 const handleResetPasswordSubmit = async () => {
   if (!resetTargetId.value || !newPasswordInput.value) return
   const res = await resetStudentPassword(resetTargetId.value, newPasswordInput.value)
-  if (res.status === 200) {
+  if (res.status === 200 || !res.error) {
     resetSuccessMessage.value = 'Password berhasil direset!'
+    showSuccess('Password siswa berhasil direset!')
     setTimeout(() => {
       isResetPasswordOpen.value = false
-    }, 1500)
+    }, 1200)
+  } else {
+    showError(res.error?.message || 'Gagal mereset password siswa.')
   }
 }
 </script>
@@ -457,6 +484,7 @@ const handleResetPasswordSubmit = async () => {
     <StudentModal
       :is-open="isModalOpen"
       :edit-student-data="selectedStudentToEdit"
+      :error-message="modalErrorMessage"
       @close="isModalOpen = false"
       @save="handleSaveStudent"
       @update="handleUpdateStudent"

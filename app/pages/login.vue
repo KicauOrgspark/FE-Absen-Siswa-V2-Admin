@@ -38,12 +38,12 @@ async function handleLogin() {
 <template>
   <div class="bg-background-cream min-h-screen flex flex-col relative overflow-hidden font-body text-on-background selection:bg-primary selection:text-white">
     <!-- Subtle Ambient Radial Glow -->
-    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl pointer-events-none z-0" />
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-125 h-125 bg-primary/5 rounded-full blur-3xl pointer-events-none z-0" />
 
     <!-- Main Content Canvas -->
-    <main class="flex-grow flex flex-col items-center justify-center relative z-10 px-4 md:px-8 py-10">
+    <main class="grow flex flex-col items-center justify-center relative z-10 px-4 md:px-8 py-10">
       <!-- Clean Modern Admin Login Card -->
-      <div class="w-full max-w-[420px] bg-surface-white rounded-3xl shadow-xl border border-surface-container-highest/80 relative overflow-hidden">
+      <div class="w-full max-w-105 bg-surface-white rounded-3xl shadow-xl border border-surface-container-highest/80 relative overflow-hidden">
         <!-- Decorative Top Accent -->
         <div class="absolute top-0 left-0 w-full h-1.5 bg-primary" />
 

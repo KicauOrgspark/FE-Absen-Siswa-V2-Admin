@@ -48,6 +48,17 @@ const filteredStudents = computed(() => {
     return matchesSearch && matchesGrade && matchesClass
   })
 })
+
+const { showError, showSuccess } = useAppToast()
+
+const handleStatusChange = async (studentId: string, status: string, studentName: string) => {
+  const res = await updateStudentStatus(studentId, status)
+  if (res.success) {
+    showSuccess(`Status ${studentName} berhasil diubah menjadi ${status}`)
+  } else {
+    showError(res.message || `Gagal mengubah status presensi ${studentName}`)
+  }
+}
 </script>
 
 <template>
@@ -240,7 +251,7 @@ const filteredStudents = computed(() => {
               <td class="p-4">
                 <QuickActionButtons
                   :current-status="student.status"
-                  @update-status="(status) => updateStudentStatus(student.id, status)"
+                  @update-status="(status) => handleStatusChange(student.id, status, student.name)"
                 />
               </td>
             </tr>

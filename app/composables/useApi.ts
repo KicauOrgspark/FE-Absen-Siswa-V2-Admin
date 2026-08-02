@@ -28,11 +28,76 @@ export const buildApiUrl = (base: string, path: string): string => {
   return `${normalizedBase}${normalizedPath}`
 }
 
+export const extractApiErrorMessage = (err: unknown, defaultMessage = 'Terjadi kesalahan pada server.'): string => {
+  if (!err) return defaultMessage
+
+  const errorObj = err as {
+    message?: string
+    status?: number
+    statusCode?: number
+    data?: { error?: string, message?: string, err?: string }
+    response?: { status?: number, _data?: { error?: string, message?: string, err?: string } }
+  }
+
+  const status = errorObj?.response?.status || errorObj?.status || errorObj?.statusCode || 500
+
+  const backendMsg = errorObj?.data?.error
+    || errorObj?.data?.message
+    || errorObj?.data?.err
+    || errorObj?.response?._data?.error
+    || errorObj?.response?._data?.message
+    || errorObj?.response?._data?.err
+
+  const isRawFetchString = (str?: string) => str && (str.startsWith('[POST]') || str.startsWith('[GET]') || str.startsWith('[PUT]') || str.startsWith('[DELETE]'))
+
+  if (backendMsg && !isRawFetchString(backendMsg)) {
+    const lower = backendMsg.toLowerCase()
+    if (lower.includes('not found user with this nisn') || lower.includes('not found user')) {
+      return 'NISN / Username tidak terdaftar di sistem.'
+    }
+    if (lower.includes('password invalid') || lower.includes('invalid password')) {
+      return 'Password yang Anda masukkan salah.'
+    }
+    if (lower.includes('invalid payload')) {
+      return 'Format data yang dikirimkan tidak valid.'
+    }
+    if (lower.includes('too many failed login attempts') || lower.includes('too many requests')) {
+      return 'Terlalu banyak percobaan. Silakan coba lagi nanti.'
+    }
+    return backendMsg
+  }
+
+  switch (status) {
+    case 400:
+      return 'Data yang dikirimkan tidak sesuai.'
+    case 401:
+      return 'Sesi telah berakhir atau Anda belum memiliki akses. Silakan login kembali.'
+    case 403:
+      return 'Anda tidak memiliki hak akses untuk melakukan tindakan ini.'
+    case 404:
+      return 'Data atau layanan yang diminta tidak ditemukan.'
+    case 409:
+      return 'Data sudah terdaftar di sistem (misal: NISN atau Username telah digunakan).'
+    case 422:
+      return 'Format isian form tidak valid.'
+    case 429:
+      return 'Terlalu banyak permintaan. Silakan tunggu beberapa menit.'
+    case 500:
+    case 502:
+    case 503:
+      return 'Terjadi gangguan pada server. Silakan coba lagi nanti.'
+    default:
+      if (errorObj?.message && !isRawFetchString(errorObj.message)) {
+        return errorObj.message
+      }
+      return defaultMessage
+  }
+}
+
 export const useApi = () => {
   const config = useRuntimeConfig()
   const apiBase = (config.public.apiBase as string) || 'https://api.smart-presence.smkpluspnb.sch.id'
 
-  // Use a single shared cookie ref for the token
   const tokenCookie = useCookie<string | null>('auth_token')
 
   const getToken = (): string => {
@@ -93,20 +158,15 @@ export const useApi = () => {
         response?: { status?: number, _data?: { error?: string, message?: string } }
       }
       const status = errorObj?.response?.status || errorObj?.status || errorObj?.statusCode || 500
-      const errMsg = errorObj?.data?.error || errorObj?.data?.message || errorObj?.response?._data?.error || errorObj?.response?._data?.message || errorObj?.message || ''
+      const errMsg = extractApiErrorMessage(err)
 
-      // 204 No Content (e.g. successful DELETE without body) is a success
       if (status === 204) {
         return { data: null, error: null, status: 204 }
       }
 
-      // Only treat as an auth error when the request actually carried a token
-      // (token exists but is invalid/expired). If no token was attached, the
-      // request simply had no auth - don't wipe the session for that.
       const hadToken = !!getToken()
       const isAuthError = hadToken && (status === 401 || status === 403)
 
-      // On invalid/expired token, clear auth and redirect to login
       if (isAuthError && import.meta.client) {
         tokenCookie.value = null
         localStorage.removeItem('token')
@@ -123,10 +183,10 @@ export const useApi = () => {
         }
       }
 
-      console.warn(`[useApi] Request failed for ${url}:`, errMsg || err)
+      console.warn(`[useApi] Request failed for ${url}:`, errMsg)
       return {
         data: null,
-        error: err instanceof Error ? err : new Error(String(errMsg || 'API request failed')),
+        error: new Error(errMsg),
         status
       }
     }

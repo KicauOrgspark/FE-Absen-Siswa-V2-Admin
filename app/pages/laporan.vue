@@ -76,20 +76,30 @@ const displayTopAbsents = computed(() => {
 
 const topAbsentStudent = computed(() => {
   const list = displayTopAbsents.value
-  if (!list.length) return null
+  if (!list.length || !list[0]) return null
   const top = list[0]
+  const topName = top.name || 'Siswa'
   return {
     ...top,
+    id: top.id || '0',
+    name: topName,
+    class: top.class || 'X RPL 1',
+    major: top.major || 'RPL',
+    alpaCount: top.alpaCount || 0,
+    avatarInitials: top.avatarInitials || 'S',
     nisn: top.nisn || 'TRB-1030',
-    email: top.email || `${top.name.toLowerCase().replace(/\s+/g, '.')}@student.pelitanusantara.sch.id`,
+    email: top.email || `${topName.toLowerCase().replace(/\s+/g, '.')}@student.pelitanusantara.sch.id`,
     parentName: 'Orang Tua Siswa',
     parentPhone: '081234567890',
     activeStatus: top.activeStatus || 'AKTIF'
   }
 })
 
+const { showError, showSuccess, showInfo } = useAppToast()
+
 const exportToExcel = async () => {
   isExporting.value = true
+  showInfo('Memulai penyiapan file laporan Excel...')
   const kelas = selectedGrade.value !== 'Grade X' ? selectedGrade.value : 'X-RPL-1'
   const jurusan = selectedMajor.value !== 'All Majors' ? selectedMajor.value : 'RPL'
 
@@ -119,8 +129,10 @@ const exportToExcel = async () => {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(blobUrl)
-  } catch (err) {
+    showSuccess('File Laporan Presensi Excel berhasil diunduh!')
+  } catch (err: unknown) {
     console.error('Export download error:', err)
+    showError(extractApiErrorMessage(err, 'Gagal mengunduh file laporan Excel.'))
   } finally {
     isExporting.value = false
   }
@@ -192,7 +204,7 @@ const exportToExcel = async () => {
               <input
                 v-model="fromDate"
                 type="date"
-                class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 px-3 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer text-secondary"
+                class="w-full appearance-none bg-surface-white border border-surface-container-highest py-2 px-3 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer text-secondary"
                 title="From Date"
               >
             </div>
@@ -201,7 +213,7 @@ const exportToExcel = async () => {
               <input
                 v-model="toDate"
                 type="date"
-                class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 px-3 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer text-secondary"
+                class="w-full appearance-none bg-surface-white border border-surface-container-highest py-2 px-3 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer text-secondary"
                 title="To Date"
               >
             </div>
@@ -211,7 +223,7 @@ const exportToExcel = async () => {
           <div class="relative flex-1 md:flex-none">
             <select
               v-model="selectedGrade"
-              class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-[120px] cursor-pointer"
+              class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-30 cursor-pointer"
             >
               <option value="Grade X">
                 Grade X
@@ -230,7 +242,7 @@ const exportToExcel = async () => {
           <div class="relative flex-1 md:flex-none">
             <select
               v-model="selectedMajor"
-              class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-[160px] cursor-pointer"
+              class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-40 cursor-pointer"
             >
               <option value="All Majors">
                 All Majors
@@ -357,7 +369,7 @@ const exportToExcel = async () => {
                 <span class="material-symbols-outlined text-sm text-primary">mail</span> Email Siswa
               </span>
               <span
-                class="font-medium text-deep-black truncate max-w-[160px]"
+                class="font-medium text-deep-black truncate max-w-40"
                 :title="topAbsentStudent.email"
               >{{ topAbsentStudent.email }}</span>
             </div>

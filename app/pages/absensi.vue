@@ -79,6 +79,17 @@ const resetFilters = () => {
   currentPage.value = 1
   fetchAttendanceStudents()
 }
+
+const { showError, showSuccess } = useAppToast()
+
+const handleStatusChange = async (studentId: string, status: string, studentName: string) => {
+  const res = await updateStudentStatus(studentId, status)
+  if (res.success) {
+    showSuccess(`Status ${studentName} berhasil diubah menjadi ${status}`)
+  } else {
+    showError(res.message || `Gagal mengubah status presensi ${studentName}`)
+  }
+}
 </script>
 
 <template>
@@ -131,7 +142,7 @@ const resetFilters = () => {
         <div
           v-for="dept in departmentStats"
           :key="dept.major"
-          class="min-w-[160px] bg-surface-white p-5 rounded-lg border flex flex-col items-center justify-center gap-2 transition-all hover:shadow-sm"
+          class="min-w-40 bg-surface-white p-5 rounded-lg border flex flex-col items-center justify-center gap-2 transition-all hover:shadow-sm"
           :class="[
             dept.major === 'DKV'
               ? 'border-primary/20 bg-primary/5 relative overflow-hidden'
@@ -155,7 +166,7 @@ const resetFilters = () => {
     <div class="bg-surface-white rounded-lg border border-surface-container-highest shadow-sm overflow-hidden">
       <!-- Filters Bar -->
       <div class="p-4 border-b border-surface-container-highest bg-surface-container-lowest flex flex-wrap gap-4 items-end">
-        <div class="flex-1 min-w-[200px]">
+        <div class="flex-1 min-w-50">
           <label class="block font-label text-label-sm text-secondary mb-1">Pencarian</label>
           <div class="relative">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[18px]">search</span>
@@ -321,7 +332,7 @@ const resetFilters = () => {
                 <div class="inline-flex gap-1">
                   <QuickActionButtons
                     :current-status="student.status"
-                    @update-status="(status) => updateStudentStatus(student.id, status)"
+                    @update-status="(status) => handleStatusChange(student.id, status, student.name)"
                   />
                 </div>
               </td>

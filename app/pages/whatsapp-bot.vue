@@ -61,6 +61,8 @@ watch(
   }
 )
 
+const { showError, showSuccess } = useAppToast()
+
 const insertTag = (tag: string) => {
   templateText.value += ` ${tag}`
 }
@@ -76,21 +78,26 @@ const handleSaveConfig = async () => {
     ]
   }
 
-  await fetchApi('/api/v1/notification/settings', {
+  const { error } = await fetchApi('/api/v1/notification/settings', {
     method: 'PUT',
     body: payload
   })
 
   isSaving.value = false
-  saveSuccessToast.value = true
-  setTimeout(() => {
-    saveSuccessToast.value = false
-  }, 3000)
+  if (!error) {
+    showSuccess('Pengaturan dan template WhatsApp berhasil disimpan!')
+    saveSuccessToast.value = true
+    setTimeout(() => {
+      saveSuccessToast.value = false
+    }, 3000)
+  } else {
+    showError(error.message || 'Gagal menyimpan pengaturan WhatsApp ke server.')
+  }
 }
 
 const sendTestMessage = async () => {
   testResultToast.value = 'Mengirim pesan tes...'
-  const { status } = await fetchApi('/api/v1/notification/test', {
+  const { status, error } = await fetchApi('/api/v1/notification/test', {
     method: 'POST',
     body: {
       phone: testPhone.value,
@@ -98,10 +105,12 @@ const sendTestMessage = async () => {
     }
   })
 
-  if (status === 200) {
+  if (status === 200 || !error) {
     testResultToast.value = 'Pesan tes WhatsApp berhasil terkirim!'
+    showSuccess('Pesan tes WhatsApp berhasil terkirim!')
   } else {
-    testResultToast.value = 'Simulasi pengiriman pesan tes selesai.'
+    testResultToast.value = 'Gagal mengirim pesan tes.'
+    showError(error?.message || 'Gagal mengirim pesan tes WhatsApp. Periksa koneksi WAHA.')
   }
 
   setTimeout(() => {
@@ -111,18 +120,18 @@ const sendTestMessage = async () => {
 }
 
 const triggerAutoAlfa = async () => {
-  const { status } = await fetchApi('/api/v1/notification/trigger', { method: 'POST' })
-  if (status === 200) {
-    alert('Sistem auto-alfa berhasil dipicu!')
+  const { status, error } = await fetchApi('/api/v1/notification/trigger', { method: 'POST' })
+  if (status === 200 || !error) {
+    showSuccess('Proses notifikasi otomatis Alfa berhasil dijalankan!')
     fetchWALogs()
   } else {
-    alert('Auto-alfa dipicu.')
+    showError(error?.message || 'Gagal memicu pengiriman notifikasi otomatis.')
   }
 }
 </script>
 
 <template>
-  <div class="max-w-[1200px] mx-auto space-y-8">
+  <div class="max-w-300 mx-auto space-y-8">
     <!-- Page Header -->
     <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
       <div>
@@ -221,7 +230,7 @@ const triggerAutoAlfa = async () => {
           <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div class="flex items-center gap-2 text-secondary">
               <span class="material-symbols-outlined text-sm">auto_fix_high</span>
-              <span class="font-label text-[11px] uppercase tracking-[0.1em] font-bold">
+              <span class="font-label text-[11px] uppercase tracking-widest font-bold">
                 Template Pesan (Status: {{ currentTab.toUpperCase() }})
               </span>
             </div>
@@ -242,7 +251,7 @@ const triggerAutoAlfa = async () => {
           <div class="relative group">
             <textarea
               v-model="templateText"
-              class="w-full min-h-[160px] p-5 bg-surface-white border border-surface-container-highest rounded-2xl text-sm text-on-surface focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none leading-relaxed transition-all"
+              class="w-full min-h-40 p-5 bg-surface-white border border-surface-container-highest rounded-2xl text-sm text-on-surface focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none leading-relaxed transition-all"
               placeholder="Tulis template pesan di sini..."
             />
           </div>

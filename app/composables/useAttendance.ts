@@ -50,14 +50,15 @@ export const normalizeActiveStatus = (st: unknown): string => {
 }
 
 export const normalizeStatus = (st: string): string => {
-  if (!st || st === 'undefined' || st === 'null' || st.trim() === '') return 'Hadir'
+  if (!st || st === 'undefined' || st === 'null' || st.trim() === '') return 'Belum Absen'
   const lower = String(st).toLowerCase().trim()
   if (lower === 'hadir') return 'Hadir'
+  if (lower === 'telat') return 'Hadir'
   if (lower === 'sakit') return 'Sakit'
   if (lower === 'izin') return 'Izin'
   if (lower === 'alpa' || lower === 'alfa') return 'Alpa'
   if (lower === 'pkl') return 'PKL'
-  if (lower === 'belum_absen' || lower === 'belum absen') return 'Hadir'
+  if (lower === 'belum_absen' || lower === 'belum absen') return 'Belum Absen'
   return st
 }
 
@@ -88,10 +89,12 @@ const extractList = (res: unknown): Record<string, unknown>[] => {
   if (Array.isArray(obj.data)) return obj.data as Record<string, unknown>[]
   if (Array.isArray(obj.users)) return obj.users as Record<string, unknown>[]
   if (Array.isArray(obj.students)) return obj.students as Record<string, unknown>[]
+  if (Array.isArray(obj.logs)) return obj.logs as Record<string, unknown>[]
   if (Array.isArray(obj.items)) return obj.items as Record<string, unknown>[]
   if (Array.isArray(obj.result)) return obj.result as Record<string, unknown>[]
   if (obj.data && typeof obj.data === 'object') {
     const subObj = obj.data as Record<string, unknown>
+    if (Array.isArray(subObj.logs)) return subObj.logs as Record<string, unknown>[]
     if (Array.isArray(subObj.users)) return subObj.users as Record<string, unknown>[]
     if (Array.isArray(subObj.students)) return subObj.students as Record<string, unknown>[]
     if (Array.isArray(subObj.data)) return subObj.data as Record<string, unknown>[]
@@ -144,9 +147,12 @@ export const useAttendance = () => {
 
   const getInitials = (name: string): string => {
     if (!name) return 'S'
-    const parts = name.trim().split(' ')
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    const parts = name.trim().split(' ').filter(Boolean)
+    if (!parts.length) return 'S'
+    if (parts.length === 1) return (parts[0] || 'S').substring(0, 2).toUpperCase()
+    const first = parts[0]?.[0] || 'S'
+    const last = parts[parts.length - 1]?.[0] || ''
+    return (first + last).toUpperCase()
   }
 
   const fetchDashboardStats = async () => {
@@ -176,29 +182,60 @@ export const useAttendance = () => {
 
   const fetchAttendanceStudents = async (filters?: { class_group?: string, status?: string, angkatan?: string, jurusan?: string }) => {
     isFetching.value = true
-    const apiParams = { ...filters }
-    if (apiParams.status && apiParams.status.toLowerCase() === 'alpa') {
-      apiParams.status = 'alfa'
-    } else if (apiParams.status) {
-      apiParams.status = apiParams.status.toLowerCase()
-    }
 
-    const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/students', { params: apiParams })
-
-    let list = extractList(data)
-
-    // Fallback: if attendance endpoint returns empty, fetch users directly from DB
-    if (!list.length) {
-      const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
-        params: { limit: 100, role: 'siswa', class_group: filters?.class_group }
+    // 1. Fetch users (students) list
+    const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
+      params: { limit: 100, role: 'siswa', class_group: filters?.class_group }
+    })
+    let userList = extractList(usersData)
+    if (!userList.length) {
+      const { data: fallbackData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
+        params: { limit: 100, class_group: filters?.class_group }
       })
-      list = extractList(usersData)
+      userList = extractList(fallbackData)
     }
 
-    students.value = list.map((item: Record<string, unknown>) => {
+    // 2. Fetch today's attendance logs from BE
+    const todayStr = new Date().toISOString().split('T')[0]
+    const { data: logsData } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
+      params: { start_date: todayStr, end_date: todayStr, limit: 100 }
+    })
+
+    const logs = extractList(logsData)
+    const logsMap = new Map<string, Record<string, unknown>>()
+    logs.forEach((log: Record<string, unknown>) => {
+      const uId = String(log.user_id || log.userId || (log.User as Record<string, unknown>)?.id || '')
+      if (uId) {
+        logsMap.set(uId, log)
+      }
+    })
+
+    students.value = userList.map((item: Record<string, unknown>) => {
       const cls = String(item.class_group || item.class || 'X DKV-1')
+      const sId = String(item.id || item.user_id || '')
+      const todayLog = logsMap.get(sId)
+
+      let status = 'Belum Absen'
+      let time = '-'
+
+      if (todayLog) {
+        status = normalizeStatus(String(todayLog.status || 'Hadir'))
+        if (todayLog.clock_in_time) {
+          const rawTime = String(todayLog.clock_in_time)
+          if (rawTime.includes('T') || rawTime.includes(' ')) {
+            const timePart = rawTime.split(/[T ]/)[1]
+            time = timePart ? timePart.substring(0, 5) : rawTime
+          } else {
+            time = rawTime
+          }
+        }
+      } else if (item.attendance_status || item.presensi_status) {
+        status = normalizeStatus(String(item.attendance_status || item.presensi_status))
+        time = String(item.time || item.created_at || '-')
+      }
+
       return {
-        id: String(item.id || item.user_id || `std-${Math.random()}`),
+        id: sId || `std-${Math.random()}`,
         nisn: String(item.nisn || item.username || '-'),
         name: String(item.full_name || item.name || 'Siswa'),
         username: String(item.username || ''),
@@ -208,8 +245,8 @@ export const useAttendance = () => {
         class: cls,
         major: String(item.jurusan || item.major || getMajorFromClass(cls)),
         grade: String(item.angkatan || item.grade || getGradeFromClass(cls)),
-        time: String(item.time || item.created_at || '07:00'),
-        status: normalizeStatus(String(item.attendance_status || item.presensi_status || 'Hadir')),
+        time,
+        status,
         activeStatus: normalizeActiveStatus(item.active_status ?? item.status_keaktifan),
         alpaCount: Number(item.alpa_count || item.total_alfa || 0),
         avatarInitials: getInitials(String(item.full_name || item.name || ''))
@@ -226,9 +263,11 @@ export const useAttendance = () => {
     }
   }
 
-  const updateStudentStatus = async (studentId: string, status: Student['status']) => {
+  const updateStudentStatus = async (studentId: string, status: Student['status']): Promise<{ success: boolean, message?: string }> => {
     const student = students.value.find(s => s.id === studentId)
     if (student) {
+      const previousStatus = student.status
+      const previousTime = student.time
       const now = new Date()
       const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
       student.status = normalizeStatus(status)
@@ -246,8 +285,15 @@ export const useAttendance = () => {
 
       if (!err) {
         fetchDashboardStats()
+        return { success: true }
+      } else {
+        // Rollback on failure
+        student.status = previousStatus
+        student.time = previousTime
+        return { success: false, message: err.message || 'Gagal mengubah status presensi siswa.' }
       }
     }
+    return { success: false, message: 'Siswa tidak ditemukan.' }
   }
 
   const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string, status?: string } = {}) => {
@@ -293,7 +339,7 @@ export const useAttendance = () => {
         major: String(u.jurusan || getMajorFromClass(cls)),
         grade: String(u.angkatan || getGradeFromClass(cls)),
         time: String(u.created_at || '-'),
-        status: normalizeStatus(String(u.attendance_status || u.presensi_status || 'Hadir')),
+        status: normalizeStatus(String(u.attendance_status || u.presensi_status || 'Belum Absen')),
         role: String(u.role || 'siswa'),
         activeStatus: normalizeActiveStatus(u.status ?? u.status_keaktifan),
         alpaCount: Number(u.alpa_count || 0),
@@ -303,7 +349,7 @@ export const useAttendance = () => {
     return data
   }
 
-  const addStudent = async (studentData: Omit<Student, 'id' | 'avatarInitials'>) => {
+  const addStudent = async (studentData: Omit<Student, 'id' | 'avatarInitials'>): Promise<{ success: boolean, message?: string }> => {
     const payload = {
       nisn: studentData.nisn,
       full_name: studentData.name,
@@ -315,17 +361,20 @@ export const useAttendance = () => {
       status: studentData.activeStatus === 'NON AKTIF' ? 'NONAKTIF' : (studentData.activeStatus || 'AKTIF')
     }
 
-    const { data } = await fetchApi('/api/v1/users', {
+    const { data, error } = await fetchApi('/api/v1/users', {
       method: 'POST',
       body: payload
     })
 
     if (data) {
-      fetchUsers()
+      await fetchUsers()
+      return { success: true }
+    } else {
+      return { success: false, message: error?.message || 'Gagal menambahkan siswa.' }
     }
   }
 
-  const updateStudent = async (id: string, updatedData: Partial<Student>) => {
+  const updateStudent = async (id: string, updatedData: Partial<Student>): Promise<{ success: boolean, message?: string }> => {
     const payload: Record<string, unknown> = {}
     if (updatedData.nisn) payload.nisn = updatedData.nisn
     if (updatedData.name) payload.full_name = updatedData.name
@@ -337,13 +386,16 @@ export const useAttendance = () => {
       payload.status = updatedData.activeStatus === 'NON AKTIF' ? 'NONAKTIF' : updatedData.activeStatus
     }
 
-    const { data } = await fetchApi(`/api/v1/users/${id}`, {
+    const { data, error } = await fetchApi(`/api/v1/users/${id}`, {
       method: 'PUT',
       body: payload
     })
 
     if (data) {
-      fetchUsers()
+      await fetchUsers()
+      return { success: true }
+    } else {
+      return { success: false, message: error?.message || 'Gagal mengupdate data siswa.' }
     }
   }
 
@@ -428,13 +480,17 @@ export const useAttendance = () => {
   const refreshQRToken = () => {
     const randomCode = 'TRB-' + Math.floor(1000 + Math.random() * 9000) + '-SECURE'
     const now = new Date()
-    const timeStr = now.toTimeString().split(' ')[0]
+    const timeStr = now.toTimeString().split(' ')[0] || '09:00:00'
     qrSession.value = {
       ...qrSession.value,
       token: randomCode,
       lastUpdated: timeStr,
       countdown: 30
     }
+  }
+
+  const saveWATemplate = (tab: 'izin' | 'sakit' | 'alfa', template: string) => {
+    waConfig.value.templates[tab] = template
   }
 
   const toggleQRActive = () => {
@@ -463,6 +519,7 @@ export const useAttendance = () => {
     deleteStudent,
     resetStudentPassword,
     importUsersExcel,
+    saveWATemplate,
     refreshQRToken,
     toggleQRActive
   }

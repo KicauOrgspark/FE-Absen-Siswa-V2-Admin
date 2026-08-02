@@ -4,6 +4,8 @@ import type { Student } from '~/composables/useAttendance'
 const props = defineProps<{
   isOpen: boolean
   editStudentData?: Student | null
+  errorMessage?: string
+  isSubmitting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -118,7 +120,6 @@ const handleSubmit = () => {
       time: '-'
     })
   }
-  emit('close')
 }
 </script>
 
@@ -182,6 +183,15 @@ const handleSubmit = () => {
                 @submit.prevent="handleSubmit"
               >
                 <div class="p-6 space-y-5 overflow-y-auto flex-1">
+                  <!-- Error Banner -->
+                  <div
+                    v-if="errorMessage"
+                    class="p-3.5 rounded-xl bg-rose-50 text-rose-700 font-medium text-xs sm:text-sm flex items-start gap-2.5 border border-rose-200"
+                  >
+                    <span class="material-symbols-outlined text-[20px] shrink-0 text-rose-600 mt-0.5">error</span>
+                    <span class="leading-snug">{{ errorMessage }}</span>
+                  </div>
+
                   <div>
                     <label class="block font-label text-label-sm text-secondary mb-1">
                       Nama Lengkap Siswa <span

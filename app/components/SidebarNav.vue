@@ -26,7 +26,7 @@ const isActive = (path: string) => {
   >
     <!-- Brand Header -->
     <div class="px-gutter-grid mb-stack-lg flex items-center gap-3">
-      <div class="bg-primary text-white p-2 rounded-lg flex-shrink-0 flex items-center justify-center">
+      <div class="bg-primary text-white p-2 rounded-lg shrink-0 flex items-center justify-center">
         <span
           class="material-symbols-outlined text-[24px]"
           data-fill="1"
@@ -55,7 +55,7 @@ const isActive = (path: string) => {
     </div>
 
     <!-- Navigation Items -->
-    <nav class="flex flex-col gap-1 flex-grow px-3 overflow-y-auto">
+    <nav class="flex flex-col gap-1 grow px-3 overflow-y-auto">
       <NuxtLink
         v-for="item in navItems"
         :key="item.path"

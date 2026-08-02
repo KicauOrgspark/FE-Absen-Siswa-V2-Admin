@@ -18,6 +18,7 @@ interface ApiResponseData {
   full_name?: string
   name?: string
   role?: string
+  avatar?: string
   access_token?: string
   token?: string
   user?: ApiResponseData
@@ -108,8 +109,7 @@ export function useAuth() {
         return { success: false, message: response?.message || 'Login gagal. Token tidak ditemukan.' }
       }
     } catch (err: unknown) {
-      const errorObj = err as { data?: { message?: string }, response?: { _data?: { message?: string } }, message?: string }
-      const errMsg = errorObj?.data?.message || errorObj?.response?._data?.message || errorObj?.message || 'Login gagal. Periksa Username / NISN dan Password Anda.'
+      const errMsg = extractApiErrorMessage(err, 'Login gagal. Periksa Username / NISN dan Password Anda.')
       return { success: false, message: errMsg }
     }
   }
