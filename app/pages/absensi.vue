@@ -2,7 +2,7 @@
 const {
   students,
   stats,
-  departmentStats,
+  totalStudentsCount,
   availableClasses,
   fetchDashboardStats,
   fetchAttendanceStudents,
@@ -44,24 +44,50 @@ const applyFilters = () => {
   fetchAttendanceStudents({
     angkatan: selectedYear.value !== 'Semua' ? selectedYear.value : undefined,
     jurusan: selectedMajor.value !== 'Semua' ? selectedMajor.value : undefined,
-    class_group: selectedClass.value !== 'Semua' ? selectedClass.value : undefined,
-    status: selectedStatus.value !== 'Semua' ? selectedStatus.value : undefined
+    class_group: selectedClass.value !== 'Semua' ? selectedClass.value : undefined
   })
 }
 
-watch([selectedYear, selectedMajor, selectedClass, selectedStatus], () => {
+watch([searchQuery, selectedYear, selectedMajor, selectedClass, selectedStatus, itemsPerPage], () => {
   currentPage.value = 1
+})
+
+watch([selectedYear, selectedMajor, selectedClass], () => {
   applyFilters()
 })
 
-const filteredStudents = computed(() => {
+const normalizeClassStr = (c: string) => String(c || '').toLowerCase().replace(/[-_ ]/g, '')
+
+// Base filtered students by Grade (Angkatan), Major (Jurusan), and Class (Kelas)
+const baseFilteredStudents = computed(() => {
   return students.value.filter((s) => {
-    const matchesSearch = !searchQuery.value || s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || s.nisn.includes(searchQuery.value)
     const matchesYear = selectedYear.value === 'Semua' || s.grade === selectedYear.value
     const matchesMajor = selectedMajor.value === 'Semua' || s.major === selectedMajor.value
-    const matchesClass = selectedClass.value === 'Semua' || s.class === selectedClass.value
-    const matchesStatus = selectedStatus.value === 'Semua' || s.status === selectedStatus.value
-    return matchesSearch && matchesYear && matchesMajor && matchesClass && matchesStatus
+    const matchesClass = selectedClass.value === 'Semua'
+      || s.class === selectedClass.value
+      || normalizeClassStr(s.class) === normalizeClassStr(selectedClass.value)
+    return matchesYear && matchesMajor && matchesClass
+  })
+})
+
+// Final filtered students (adds Search query and Status filter on top of baseFilteredStudents)
+const filteredStudents = computed(() => {
+  return baseFilteredStudents.value.filter((s) => {
+    const q = searchQuery.value.trim().toLowerCase()
+    const matchesSearch = !q || s.name.toLowerCase().includes(q) || s.nisn.toLowerCase().includes(q)
+
+    let matchesStatus = true
+    if (selectedStatus.value !== 'Semua') {
+      const target = selectedStatus.value.toLowerCase()
+      const current = (s.status || '').toLowerCase()
+      if (target === 'alpa' || target === 'alfa') {
+        matchesStatus = current === 'alpa' || current === 'alfa'
+      } else {
+        matchesStatus = current === target
+      }
+    }
+
+    return matchesSearch && matchesStatus
   })
 })
 
@@ -81,6 +107,41 @@ const resetFilters = () => {
   currentPage.value = 1
   fetchAttendanceStudents()
 }
+
+const displayStats = computed(() => {
+  const isClassOrYearFiltered = selectedYear.value !== 'Semua' || selectedMajor.value !== 'Semua' || selectedClass.value !== 'Semua'
+  const list = baseFilteredStudents.value
+  const totalAbsen = list.filter(s => s.status?.toLowerCase() !== 'belum absen' && s.status?.toLowerCase() !== 'belum_absen').length
+  const hadirTepat = list.filter(s => s.status?.toLowerCase() === 'hadir').length
+  const telat = list.filter(s => s.status?.toLowerCase() === 'telat' || s.status?.toLowerCase() === 'terlambat').length
+  const sakit = list.filter(s => s.status?.toLowerCase() === 'sakit').length
+  const izin = list.filter(s => s.status?.toLowerCase() === 'izin').length
+  const alpa = list.filter(s => s.status?.toLowerCase() === 'alpa' || s.status?.toLowerCase() === 'alfa').length
+
+  const serverTotal = totalStudentsCount.value || stats.value.totalStudents
+
+  return {
+    totalStudents: isClassOrYearFiltered ? list.length : (serverTotal || list.length),
+    totalAbsenHariIni: isClassOrYearFiltered ? totalAbsen : Math.max(stats.value.totalAbsenHariIni, totalAbsen),
+    hadirCount: isClassOrYearFiltered ? (hadirTepat + telat) : Math.max(stats.value.hadirCount, hadirTepat + telat),
+    hadirTepatCount: isClassOrYearFiltered ? hadirTepat : Math.max(stats.value.hadirTepatCount, hadirTepat),
+    telatCount: isClassOrYearFiltered ? telat : Math.max(stats.value.telatCount, telat),
+    sakitCount: isClassOrYearFiltered ? sakit : Math.max(stats.value.sakitCount, sakit),
+    alpaCount: isClassOrYearFiltered ? alpa : Math.max(stats.value.alpaCount, alpa),
+    izinCount: isClassOrYearFiltered ? izin : Math.max(stats.value.izinCount, izin)
+  }
+})
+
+const departmentStats = computed(() => {
+  const majors: Array<'RPL' | 'TKJ' | 'DKV' | 'LPB' | 'TOI'> = ['RPL', 'TKJ', 'DKV', 'LPB', 'TOI']
+  return majors.map((m) => {
+    const list = baseFilteredStudents.value.filter(s => s.major === m)
+    if (!list.length) return { major: m, percentage: 0 }
+    const present = list.filter(s => s.status?.toLowerCase() === 'hadir' || s.status?.toLowerCase() === 'telat').length
+    const percentage = Math.round((present / list.length) * 100)
+    return { major: m, percentage }
+  })
+})
 
 const { showError, showSuccess } = useAppToast()
 
@@ -113,23 +174,27 @@ const handleStatusChange = async (studentId: string, status: string, studentName
     <div class="grid grid-cols-2 md:grid-cols-4 gap-gutter-grid">
       <BentoStatCard
         title="Total Students"
-        :value="stats.totalStudents.toLocaleString('id-ID')"
+        :value="displayStats.totalStudents.toLocaleString('id-ID')"
         icon="school"
       />
       <BentoStatCard
         title="Total Absen Hari Ini"
-        :value="stats.totalAbsenHariIni"
+        :value="displayStats.totalAbsenHariIni"
         icon="group"
       />
       <BentoStatCard
         title="Hadir & Telat"
-        :value="stats.hadirCount"
+        :value="displayStats.hadirCount"
         icon="how_to_reg"
         accent-color="green"
+        :sub-badges="[
+          { text: `+${displayStats.hadirTepatCount ?? displayStats.hadirCount} Tepat`, color: '#00875a' },
+          { text: `+${displayStats.telatCount ?? 0} Telat`, color: '#ea580c' }
+        ]"
       />
       <BentoStatCard
         title="Alpa"
-        :value="stats.alpaCount"
+        :value="displayStats.alpaCount"
         icon="person_off"
         accent-color="red"
       />
@@ -253,6 +318,9 @@ const handleStatusChange = async (studentId: string, status: string, studentName
             </option>
             <option value="Hadir">
               Hadir
+            </option>
+            <option value="Telat">
+              Telat
             </option>
             <option value="Izin">
               Izin

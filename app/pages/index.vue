@@ -2,8 +2,8 @@
 const {
   students,
   stats,
+  totalStudentsCount,
   availableClasses,
-  pagination,
   fetchDashboardStats,
   fetchDashboardTrend,
   fetchAttendanceStudents,
@@ -26,15 +26,12 @@ const formattedDate = computed(() => {
   return new Date().toLocaleDateString('id-ID', options)
 })
 
-// Fetch data dari API (server-side pagination & filter)
+// Fetch data dari API
 const fetchTableData = () => {
   const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
   fetchAttendanceStudents({
     angkatan: angkatanVal,
-    class_group: selectedClass.value !== 'Semua Kelas' ? selectedClass.value : undefined,
-    search: searchQuery.value || undefined,
-    page: currentPage.value,
-    limit: itemsPerPage.value
+    class_group: selectedClass.value !== 'Semua Kelas' ? selectedClass.value : undefined
   })
 }
 
@@ -51,20 +48,68 @@ watch([selectedGrade, selectedClass], () => {
   const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
   fetchDashboardStats({ angkatan: angkatanVal })
   fetchDashboardTrend({ angkatan: angkatanVal })
+  fetchTableData()
 })
+
+const normalizeClassStr = (c: string) => String(c || '').toLowerCase().replace(/[-_ ]/g, '')
+
+const baseFilteredStudents = computed(() => {
+  return students.value.filter((s) => {
+    const matchesGrade = selectedGrade.value === 'Semua Angkatan' || s.grade === selectedGrade.value
+    const matchesClass = selectedClass.value === 'Semua Kelas'
+      || s.class === selectedClass.value
+      || normalizeClassStr(s.class) === normalizeClassStr(selectedClass.value)
+    return matchesGrade && matchesClass
+  })
+})
+
+const filteredStudents = computed(() => {
+  return baseFilteredStudents.value.filter((s) => {
+    const q = searchQuery.value.trim().toLowerCase()
+    return !q || s.name.toLowerCase().includes(q) || s.nisn.toLowerCase().includes(q)
+  })
+})
+
+const paginatedStudents = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  return filteredStudents.value.slice(start, start + itemsPerPage.value)
+})
+
+const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1)
 
 // Reset ke halaman 1 saat kriteria pencarian / limit berubah
 watch([searchQuery, selectedGrade, selectedClass, itemsPerPage], () => {
   currentPage.value = 1
 })
 
-// Refetch dari API saat page, filter, search, atau limit berubah
-watch([searchQuery, selectedGrade, selectedClass, currentPage, itemsPerPage], fetchTableData)
-
 // Kalau total halaman mengecil (setelah filter/hapus), mundur ke halaman valid
-watch(() => pagination.value.totalPages, (tp) => {
+watch(totalPages, (tp) => {
   if (currentPage.value > tp) {
     currentPage.value = Math.max(1, tp)
+  }
+})
+
+const displayStats = computed(() => {
+  const isClassOrGradeFiltered = selectedGrade.value !== 'Semua Angkatan' || selectedClass.value !== 'Semua Kelas'
+  const list = baseFilteredStudents.value
+  const totalAbsen = list.filter(s => s.status?.toLowerCase() !== 'belum absen' && s.status?.toLowerCase() !== 'belum_absen').length
+  const hadirTepat = list.filter(s => s.status?.toLowerCase() === 'hadir').length
+  const telat = list.filter(s => s.status?.toLowerCase() === 'telat' || s.status?.toLowerCase() === 'terlambat').length
+  const sakit = list.filter(s => s.status?.toLowerCase() === 'sakit').length
+  const izin = list.filter(s => s.status?.toLowerCase() === 'izin').length
+  const alpa = list.filter(s => s.status?.toLowerCase() === 'alpa' || s.status?.toLowerCase() === 'alfa').length
+
+  const serverTotal = totalStudentsCount.value || stats.value.totalStudents
+
+  return {
+    totalStudents: isClassOrGradeFiltered ? list.length : (serverTotal || list.length),
+    totalAbsenHariIni: isClassOrGradeFiltered ? totalAbsen : Math.max(stats.value.totalAbsenHariIni, totalAbsen),
+    hadirCount: isClassOrGradeFiltered ? (hadirTepat + telat) : Math.max(stats.value.hadirCount, hadirTepat + telat),
+    hadirTepatCount: isClassOrGradeFiltered ? hadirTepat : Math.max(stats.value.hadirTepatCount, hadirTepat),
+    telatCount: isClassOrGradeFiltered ? telat : Math.max(stats.value.telatCount, telat),
+    sakitCount: isClassOrGradeFiltered ? sakit : Math.max(stats.value.sakitCount, sakit),
+    alpaCount: isClassOrGradeFiltered ? alpa : Math.max(stats.value.alpaCount, alpa),
+    izinCount: isClassOrGradeFiltered ? izin : Math.max(stats.value.izinCount, izin)
   }
 })
 
@@ -103,30 +148,30 @@ const handleStatusChange = async (studentId: string, status: string, studentName
       <!-- Stat Card 1 -->
       <BentoStatCard
         title="Total Siswa"
-        :value="stats.totalStudents.toLocaleString('id-ID')"
+        :value="displayStats.totalStudents.toLocaleString('id-ID')"
         icon="school"
       />
       <!-- Stat Card 2 -->
       <BentoStatCard
         title="Total Absen Hari Ini"
-        :value="stats.totalAbsenHariIni"
+        :value="displayStats.totalAbsenHariIni"
         icon="group"
       />
       <!-- Stat Card 3 -->
       <BentoStatCard
         title="Hadir & Telat"
-        :value="stats.hadirCount"
+        :value="displayStats.hadirCount"
         icon="how_to_reg"
         accent-color="green"
         :sub-badges="[
-          { text: `+${stats.hadirCount} Tepat`, color: '#00875a' },
-          { text: '+0 Telat', color: '#00875a' }
+          { text: `+${displayStats.hadirTepatCount ?? displayStats.hadirCount} Tepat`, color: '#00875a' },
+          { text: `+${displayStats.telatCount ?? 0} Telat`, color: '#ea580c' }
         ]"
       />
       <!-- Stat Card 4 -->
       <BentoStatCard
         title="Alpa"
-        :value="stats.alpaCount"
+        :value="displayStats.alpaCount"
         icon="person_off"
         accent-color="red"
       />
@@ -225,7 +270,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
           </thead>
           <tbody class="divide-y divide-surface-container-highest text-body-md text-deep-black">
             <tr
-              v-for="student in students"
+              v-for="student in paginatedStudents"
               :key="student.id"
               class="hover:bg-surface-container-low transition-colors"
             >
@@ -262,7 +307,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
                 />
               </td>
             </tr>
-            <tr v-if="!students.length">
+            <tr v-if="!paginatedStudents.length">
               <td
                 colspan="7"
                 class="p-8 text-center text-secondary"
@@ -278,7 +323,7 @@ const handleStatusChange = async (studentId: string, status: string, studentName
       <div class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary">
         <div class="flex flex-wrap items-center gap-4">
           <span>
-            Menampilkan {{ students.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, pagination.total) }} dari {{ pagination.total }} siswa
+            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }} siswa
           </span>
           <div class="flex items-center gap-2">
             <span class="text-xs font-label">Tampilkan:</span>
@@ -316,11 +361,11 @@ const handleStatusChange = async (studentId: string, status: string, studentName
             <span class="material-symbols-outlined text-[18px]">chevron_left</span>
           </button>
           <span class="px-3 font-bold text-deep-black text-sm">
-            {{ currentPage }} / {{ pagination.totalPages }}
+            {{ currentPage }} / {{ totalPages }}
           </span>
           <button
             class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            :disabled="currentPage >= pagination.totalPages"
+            :disabled="currentPage >= totalPages"
             title="Halaman Berikutnya"
             @click="currentPage++"
           >
@@ -328,9 +373,9 @@ const handleStatusChange = async (studentId: string, status: string, studentName
           </button>
           <button
             class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            :disabled="currentPage >= pagination.totalPages"
+            :disabled="currentPage >= totalPages"
             title="Halaman Terakhir"
-            @click="currentPage = pagination.totalPages"
+            @click="currentPage = totalPages"
           >
             <span class="material-symbols-outlined text-[18px]">last_page</span>
           </button>

@@ -11,7 +11,7 @@ export interface Student {
   major: 'RPL' | 'TKJ' | 'DKV' | 'LPB' | 'TOI' | string
   grade: 'X' | 'XI' | 'XII' | string
   time?: string
-  status: 'Hadir' | 'Sakit' | 'Izin' | 'Alpa' | 'Belum Absen' | string
+  status: 'Hadir' | 'Telat' | 'Sakit' | 'Izin' | 'Alpa' | 'Belum Absen' | string
   role?: 'siswa' | 'admin' | string
   activeStatus: 'AKTIF' | 'PKL' | 'NON AKTIF' | string
   alpaCount: number
@@ -53,7 +53,7 @@ export const normalizeStatus = (st: string): string => {
   if (!st || st === 'undefined' || st === 'null' || st.trim() === '') return 'Belum Absen'
   const lower = String(st).toLowerCase().trim()
   if (lower === 'hadir') return 'Hadir'
-  if (lower === 'telat') return 'Hadir'
+  if (lower === 'telat' || lower === 'terlambat') return 'Telat'
   if (lower === 'sakit') return 'Sakit'
   if (lower === 'izin') return 'Izin'
   if (lower === 'alpa' || lower === 'alfa') return 'Alpa'
@@ -214,22 +214,24 @@ export const useAttendance = () => {
     }
   }
 
-  const fetchDashboardStats = async (filters?: { angkatan?: string }) => {
+  const fetchDashboardStats = async (filters?: { angkatan?: string, class_group?: string }) => {
     const { data } = await fetchApi<Record<string, unknown>>('/api/v1/dashboard', {
-      params: { angkatan: filters?.angkatan }
+      params: { angkatan: filters?.angkatan, class_group: filters?.class_group }
     })
     if (data) {
-      const serverTotalSiswa = Number(data.total_siswa ?? data.total_students ?? data.total_user ?? 0)
+      const resObj = (data.data && typeof data.data === 'object' ? data.data : data) as Record<string, unknown>
+      const serverTotalSiswa = Number(resObj.total_siswa ?? resObj.total_students ?? resObj.total_user ?? resObj.total ?? 0)
       if (serverTotalSiswa > 0) {
         totalStudentsCount.value = serverTotalSiswa
       }
       dashboardMetrics.value = {
         totalStudents: serverTotalSiswa || dashboardMetrics.value.totalStudents,
-        totalAbsenHariIni: Number(data.total_absen_hari_ini ?? data.total_absen ?? 0),
-        hadirCount: Number(data.hadir_count ?? data.hadir ?? data.total_hadir_hari_ini ?? 0),
-        sakitCount: Number(data.sakit_count ?? data.sakit ?? data.total_sakit_hari_ini ?? 0),
-        alpaCount: Number(data.alpa_count ?? data.alpa ?? data.total_alfa_hari_ini ?? 0),
-        izinCount: Number(data.izin_count ?? data.izin ?? 0)
+        totalAbsenHariIni: Number(resObj.total_absen_hari_ini ?? resObj.total_absen ?? resObj.total_absen_today ?? 0),
+        hadirCount: Number(resObj.hadir_count ?? resObj.hadir ?? resObj.total_hadir_hari_ini ?? resObj.total_hadir ?? 0),
+        telatCount: Number(resObj.telat_count ?? resObj.telat ?? resObj.total_telat_hari_ini ?? resObj.total_telat ?? 0),
+        sakitCount: Number(resObj.sakit_count ?? resObj.sakit ?? resObj.total_sakit_hari_ini ?? resObj.total_sakit ?? 0),
+        alpaCount: Number(resObj.alpa_count ?? resObj.alpa ?? resObj.total_alfa_hari_ini ?? resObj.total_alfa ?? 0),
+        izinCount: Number(resObj.izin_count ?? resObj.izin ?? resObj.total_izin_hari_ini ?? resObj.total_izin ?? 0)
       }
     }
   }
@@ -252,12 +254,21 @@ export const useAttendance = () => {
 
     // 1. Fetch users (students) list with configurable page & limit (set from frontend)
     const page = filters?.page || 1
-    const limit = filters?.limit ?? 50
+    const limit = filters?.limit ?? 500
+    const paramsBase = {
+      role: 'siswa',
+      class_group: filters?.class_group,
+      angkatan: filters?.angkatan,
+      search: filters?.search
+    }
+
     const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
-      params: { page, limit, role: 'siswa', class_group: filters?.class_group, angkatan: filters?.angkatan, search: filters?.search }
+      params: { page, limit, ...paramsBase }
     })
     let userList = extractList(usersData)
     const serverTotal = extractTotalFromResponse(usersData)
+    const totalPages = extractTotalPagesFromResponse(usersData)
+
     if (serverTotal > 0) {
       totalStudentsCount.value = serverTotal
     } else if (userList.length > 0) {
@@ -275,45 +286,46 @@ export const useAttendance = () => {
       }
     }
 
-    applyPaginationMeta(usersData, page, limit, userList.length)
-
-    // 2. Fetch today's attendance logs from BE (limit besar agar status semua siswa cocok antar halaman)
-    const todayStr = new Date().toISOString().split('T')[0]
-    const { data: logsData } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
-      params: { start_date: todayStr, end_date: todayStr, limit: 2000 }
-    })
-
-    const logs = extractList(logsData)
-    const logsMap = new Map<string, Record<string, unknown>>()
-    logs.forEach((log: Record<string, unknown>) => {
-      const uId = String(log.user_id || log.userId || (log.User as Record<string, unknown>)?.id || '')
-      if (uId) {
-        logsMap.set(uId, log)
+    // Auto-fetch ALL remaining pages in controlled batches of 5 requests to get 100% of students without 429 rate limit
+    if (totalPages > 1 && userList.length < serverTotal && !filters?.page) {
+      const BATCH_SIZE = 5
+      for (let p = 2; p <= totalPages; p += BATCH_SIZE) {
+        const batchPromises = []
+        const maxP = Math.min(p + BATCH_SIZE - 1, totalPages)
+        for (let currentP = p; currentP <= maxP; currentP++) {
+          batchPromises.push(
+            fetchApi<Record<string, unknown>>('/api/v1/users', {
+              params: { page: currentP, limit, ...paramsBase }
+            })
+          )
+        }
+        const batchResponses = await Promise.all(batchPromises)
+        batchResponses.forEach((res) => {
+          if (res.data) {
+            userList = userList.concat(extractList(res.data))
+          }
+        })
       }
-    })
+    }
+
+    applyPaginationMeta(usersData, page, limit, Math.max(serverTotal, userList.length))
 
     students.value = userList.map((item: Record<string, unknown>) => {
       const cls = String(item.class_group || item.class || 'X DKV-1')
       const sId = String(item.id || item.user_id || '')
-      const todayLog = logsMap.get(sId)
 
       let status = 'Belum Absen'
       let time = '-'
 
-      if (todayLog) {
-        status = normalizeStatus(String(todayLog.status || 'Hadir'))
-        if (todayLog.clock_in_time) {
-          const rawTime = String(todayLog.clock_in_time)
-          if (rawTime.includes('T') || rawTime.includes(' ')) {
-            const timePart = rawTime.split(/[T ]/)[1]
-            time = timePart ? timePart.substring(0, 5) : rawTime
-          } else {
-            time = rawTime
-          }
+      if (item.attendance_status || item.presensi_status || item.attendanceStatus) {
+        status = normalizeStatus(String(item.attendance_status || item.presensi_status || item.attendanceStatus))
+        const rawTime = String(item.time || item.clock_in_time || item.created_at || '-')
+        if (rawTime && rawTime !== '-' && (rawTime.includes('T') || rawTime.includes(' '))) {
+          const timePart = rawTime.split(/[T ]/)[1]
+          time = timePart ? timePart.substring(0, 5) : rawTime
+        } else {
+          time = rawTime
         }
-      } else if (item.attendance_status || item.presensi_status) {
-        status = normalizeStatus(String(item.attendance_status || item.presensi_status))
-        time = String(item.time || item.created_at || '-')
       }
 
       return {
@@ -329,11 +341,11 @@ export const useAttendance = () => {
         grade: String(item.angkatan || item.grade || getGradeFromClass(cls)),
         time,
         status,
-        activeStatus: normalizeActiveStatus(item.active_status ?? item.status_keaktifan),
+        activeStatus: normalizeActiveStatus(item.active_status ?? item.status_keaktifan ?? item.status),
         alpaCount: Number(item.alpa_count || item.total_alfa || 0),
         avatarInitials: getInitials(String(item.full_name || item.name || ''))
       }
-    })
+    }).sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }))
     isFetching.value = false
   }
 
@@ -443,7 +455,7 @@ export const useAttendance = () => {
         alpaCount: Number(u.alpa_count || 0),
         avatarInitials: getInitials(String(u.full_name || u.name || ''))
       }
-    })
+    }).sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }))
     return data
   }
 
@@ -543,15 +555,29 @@ export const useAttendance = () => {
   const stats = computed(() => {
     const totalAbsenHariIni = students.value.filter(s => s.status?.toLowerCase() !== 'belum absen' && s.status?.toLowerCase() !== 'belum_absen').length
     const hadir = students.value.filter(s => s.status?.toLowerCase() === 'hadir').length
+    const telat = students.value.filter(s => s.status?.toLowerCase() === 'telat' || s.status?.toLowerCase() === 'terlambat').length
     const sakit = students.value.filter(s => s.status?.toLowerCase() === 'sakit').length
+    const izin = students.value.filter(s => s.status?.toLowerCase() === 'izin').length
     const alpa = students.value.filter(s => s.status?.toLowerCase() === 'alpa' || s.status?.toLowerCase() === 'alfa').length
+
+    const calcHadirTotal = hadir + telat
+    const serverHadirTotal = Number(dashboardMetrics.value.hadirCount || 0)
+    const finalHadirTotal = Math.max(serverHadirTotal, calcHadirTotal)
+
+    const serverTelat = Number(dashboardMetrics.value.telatCount || 0)
+    const finalTelat = Math.max(serverTelat, telat)
+
+    const finalHadirTepat = Math.max(0, finalHadirTotal - finalTelat)
 
     return {
       totalStudents: dashboardMetrics.value.totalStudents || totalStudentsCount.value || students.value.length,
-      totalAbsenHariIni: dashboardMetrics.value.totalAbsenHariIni || totalAbsenHariIni,
-      hadirCount: dashboardMetrics.value.hadirCount || hadir,
-      sakitCount: dashboardMetrics.value.sakitCount || sakit,
-      alpaCount: dashboardMetrics.value.alpaCount || alpa
+      totalAbsenHariIni: Math.max(dashboardMetrics.value.totalAbsenHariIni || 0, totalAbsenHariIni),
+      hadirCount: finalHadirTotal,
+      hadirTepatCount: finalHadirTepat,
+      telatCount: finalTelat,
+      sakitCount: Math.max(dashboardMetrics.value.sakitCount || 0, sakit),
+      alpaCount: Math.max(dashboardMetrics.value.alpaCount || 0, alpa),
+      izinCount: Math.max(dashboardMetrics.value.izinCount || 0, izin)
     }
   })
 

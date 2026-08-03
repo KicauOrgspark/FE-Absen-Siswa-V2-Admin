@@ -1,12 +1,13 @@
 <script setup lang="ts">
 const props = defineProps<{
-  status: 'Hadir' | 'Sakit' | 'Alpa' | 'Izin' | 'Belum Absen' | 'Active' | 'Inactive' | string
+  status: 'Hadir' | 'Telat' | 'Sakit' | 'Alpa' | 'Izin' | 'Belum Absen' | 'Active' | 'Inactive' | string
 }>()
 
 const normalizedStatus = computed(() => {
   if (!props.status) return 'Belum Absen'
   const lower = String(props.status).toLowerCase().trim()
   if (lower === 'hadir' || lower === 'active' || lower === 'aktif') return 'Hadir'
+  if (lower === 'telat' || lower === 'terlambat') return 'Telat'
   if (lower === 'sakit') return 'Sakit'
   if (lower === 'izin') return 'Izin'
   if (lower === 'alpa' || lower === 'alfa') return 'Alpa'
@@ -21,6 +22,8 @@ const badgeClasses = computed(() => {
     case 'Active':
     case 'AKTIF':
       return 'bg-tertiary-fixed/30 text-on-tertiary-fixed-variant border border-tertiary-fixed-dim/30 font-bold'
+    case 'Telat':
+      return 'bg-orange-100 text-orange-900 border border-orange-300/80 font-bold'
     case 'PKL':
       return 'bg-purple-100 text-purple-900 border border-purple-300/80 font-bold'
     case 'Sakit':
@@ -44,6 +47,8 @@ const dotColor = computed(() => {
     case 'Active':
     case 'AKTIF':
       return 'bg-tertiary-fixed-dim'
+    case 'Telat':
+      return 'bg-orange-500'
     case 'PKL':
       return 'bg-purple-600'
     case 'Sakit':
