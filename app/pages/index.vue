@@ -4,9 +4,11 @@ const {
   stats,
   totalStudentsCount,
   availableClasses,
+  hasMoreStudents,
   fetchDashboardStats,
   fetchDashboardTrend,
   fetchAttendanceStudents,
+  loadMoreStudents,
   fetchClassesList,
   updateStudentStatus
 } = useAttendance()
@@ -35,6 +37,21 @@ const fetchTableData = () => {
   })
 }
 
+const loadMoreSentinel = ref<HTMLElement | null>(null)
+let loadMoreObserver: IntersectionObserver | null = null
+
+const setupLoadMoreObserver = () => {
+  if (!import.meta.client) return
+  loadMoreObserver = new IntersectionObserver((entries) => {
+    if (entries[0]?.isIntersecting && hasMoreStudents.value) {
+      loadMoreStudents()
+    }
+  }, { rootMargin: '200px' })
+  if (loadMoreSentinel.value) {
+    loadMoreObserver.observe(loadMoreSentinel.value)
+  }
+}
+
 onMounted(async () => {
   await Promise.all([
     fetchDashboardStats(),
@@ -42,13 +59,23 @@ onMounted(async () => {
     fetchClassesList(),
     fetchTableData()
   ])
+  await nextTick()
+  setupLoadMoreObserver()
 })
 
+onUnmounted(() => {
+  loadMoreObserver?.disconnect()
+})
+
+let filterTimer: ReturnType<typeof setTimeout> | null = null
 watch([selectedGrade, selectedClass], () => {
-  const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
-  fetchDashboardStats({ angkatan: angkatanVal })
-  fetchDashboardTrend({ angkatan: angkatanVal })
-  fetchTableData()
+  if (filterTimer) clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => {
+    const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
+    fetchDashboardStats({ angkatan: angkatanVal })
+    fetchDashboardTrend({ angkatan: angkatanVal })
+    fetchTableData()
+  }, 300)
 })
 
 const normalizeClassStr = (c: string) => String(c || '').toLowerCase().replace(/[-_ ]/g, '')
@@ -380,6 +407,18 @@ const handleStatusChange = async (studentId: string, status: string, studentName
             <span class="material-symbols-outlined text-[18px]">last_page</span>
           </button>
         </div>
+      </div>
+
+      <!-- Lazy Load Sentinel -->
+      <div
+        ref="loadMoreSentinel"
+        class="flex items-center justify-center gap-2 py-3 text-xs text-secondary"
+      >
+        <template v-if="hasMoreStudents">
+          <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+          <span>Memuat data siswa...</span>
+        </template>
+        <span v-else-if="students.length">Semua data siswa telah dimuat</span>
       </div>
     </div>
   </div>

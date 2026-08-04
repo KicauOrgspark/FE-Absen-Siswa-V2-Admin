@@ -4,8 +4,10 @@ const {
   stats,
   totalStudentsCount,
   availableClasses,
+  hasMoreStudents,
   fetchDashboardStats,
   fetchAttendanceStudents,
+  loadMoreStudents,
   fetchClassesList,
   updateStudentStatus
 } = useAttendance()
@@ -32,12 +34,33 @@ const formattedDate = computed(() => {
   return new Date().toLocaleDateString('id-ID', options)
 })
 
+const loadMoreSentinel = ref<HTMLElement | null>(null)
+let loadMoreObserver: IntersectionObserver | null = null
+
+const setupLoadMoreObserver = () => {
+  if (!import.meta.client) return
+  loadMoreObserver = new IntersectionObserver((entries) => {
+    if (entries[0]?.isIntersecting && hasMoreStudents.value) {
+      loadMoreStudents()
+    }
+  }, { rootMargin: '200px' })
+  if (loadMoreSentinel.value) {
+    loadMoreObserver.observe(loadMoreSentinel.value)
+  }
+}
+
 onMounted(async () => {
   await Promise.all([
     fetchDashboardStats(),
     fetchClassesList(),
     fetchAttendanceStudents()
   ])
+  await nextTick()
+  setupLoadMoreObserver()
+})
+
+onUnmounted(() => {
+  loadMoreObserver?.disconnect()
 })
 
 const applyFilters = () => {
@@ -48,12 +71,15 @@ const applyFilters = () => {
   })
 }
 
+let filterTimer: ReturnType<typeof setTimeout> | null = null
+
 watch([searchQuery, selectedYear, selectedMajor, selectedClass, selectedStatus, itemsPerPage], () => {
   currentPage.value = 1
 })
 
 watch([selectedYear, selectedMajor, selectedClass], () => {
-  applyFilters()
+  if (filterTimer) clearTimeout(filterTimer)
+  filterTimer = setTimeout(applyFilters, 300)
 })
 
 const normalizeClassStr = (c: string) => String(c || '').toLowerCase().replace(/[-_ ]/g, '')
@@ -460,6 +486,18 @@ const handleStatusChange = async (studentId: string, status: string, studentName
             <span class="material-symbols-outlined text-[18px]">chevron_right</span>
           </button>
         </div>
+      </div>
+
+      <!-- Lazy Load Sentinel -->
+      <div
+        ref="loadMoreSentinel"
+        class="flex items-center justify-center gap-2 py-3 text-xs text-secondary"
+      >
+        <template v-if="hasMoreStudents">
+          <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+          <span>Memuat data siswa...</span>
+        </template>
+        <span v-else-if="students.length">Semua data siswa telah dimuat</span>
       </div>
     </div>
   </div>

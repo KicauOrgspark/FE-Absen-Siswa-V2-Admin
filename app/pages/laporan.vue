@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { normalizeStatus } from '~/composables/useAttendance'
+
 const { topAbsents } = useAttendance()
 const { fetchApi, getExportUrl } = useApi()
 
@@ -9,42 +11,93 @@ const selectedMajor = ref('All Majors')
 const searchQuery = ref('')
 
 const serverTopAlfaList = ref<Record<string, unknown>[]>([])
-const monthlyRecapData = ref<Record<string, unknown> | null>(null)
+const monthlyRecapList = ref<Record<string, unknown>[]>([])
 const attendanceLogsList = ref<Record<string, unknown>[]>([])
 const isExporting = ref(false)
 
+const topAlfaLoading = ref(true)
+const topAlfaError = ref('')
+const recapLoading = ref(true)
+const recapError = ref('')
+const logsLoading = ref(true)
+const logsError = ref('')
+
 const fetchTopAlfa = async () => {
-  const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/top-alfa')
+  topAlfaLoading.value = true
+  topAlfaError.value = ''
+  const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/top-alfa')
   const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
   if (list) {
     serverTopAlfaList.value = list as Record<string, unknown>[]
   }
+  if (error) {
+    topAlfaError.value = error.message || 'Gagal memuat data top alfa.'
+  }
+  topAlfaLoading.value = false
 }
 
+const academicYear = computed(() => {
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+  const start = month >= 7 ? year : year - 1
+  const end = start + 1
+  return `${start}/${end}`
+})
+
 const fetchMonthlyRecap = async () => {
-  const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/monthly-recap', {
-    params: { year: '2025/2026' }
+  recapLoading.value = true
+  recapError.value = ''
+  const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/monthly-recap', {
+    params: { year: academicYear.value }
   })
-  if (data) {
-    monthlyRecapData.value = data
+  const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
+  if (list) {
+    monthlyRecapList.value = list as Record<string, unknown>[]
   }
+  if (error) {
+    recapError.value = error.message || 'Gagal memuat rekap bulanan.'
+  }
+  recapLoading.value = false
 }
 
 const fetchAttendanceLogs = async () => {
-  const { data } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
+  logsLoading.value = true
+  logsError.value = ''
+  const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
     params: {
       page: 1,
-      limit: 12,
+      limit: 20,
       start_date: fromDate.value,
       end_date: toDate.value,
       class_group: selectedGrade.value !== 'Grade X' ? selectedGrade.value : undefined,
       search: searchQuery.value || undefined
     }
   })
-  const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
+  const list = Array.isArray((data?.data as Record<string, unknown> | undefined)?.logs)
+    ? (data.data as Record<string, unknown>).logs
+    : Array.isArray(data?.data)
+      ? data.data
+      : null
   if (list) {
-    attendanceLogsList.value = list as Record<string, unknown>[]
+    attendanceLogsList.value = (list as Record<string, unknown>[]).map((log, idx) => {
+      const user = log.user as Record<string, unknown> | undefined
+      const rawTime = String(log.clock_in_time || log.created_at || '-')
+      return {
+        id: String(log.id ?? idx),
+        name: String(user?.full_name || user?.name || '-'),
+        status: normalizeStatus(String(log.status || 'Belum Absen')),
+        ip: String(log.captured_ip || log.CapturedIp || ''),
+        time: rawTime
+      }
+    })
+  } else {
+    attendanceLogsList.value = []
   }
+  if (error) {
+    logsError.value = error.message || 'Gagal memuat log absensi.'
+  }
+  logsLoading.value = false
 }
 
 onMounted(() => {
@@ -65,7 +118,8 @@ const displayTopAbsents = computed(() => {
       nisn: String(item.nisn || '-'),
       class: String(item.class_group || item.class || 'X RPL 1'),
       major: String(item.jurusan || 'RPL'),
-      alpaCount: Number(item.total_alfa || item.alpa_count || item.alfa_count || 0),
+      alpaCount: Number(item.alfaCount ?? item.alfa_count ?? item.total_alfa ?? item.alpa_count ?? 0),
+      telatCount: Number(item.telatCount ?? item.telat_count ?? 0),
       avatarInitials: String(item.full_name || item.name || 'S').substring(0, 2).toUpperCase(),
       email: String(item.email || `${String(item.full_name || 'student').toLowerCase().replace(/\s+/g, '.')}@student.pelitanusantara.sch.id`),
       activeStatus: String(item.active_status || 'AKTIF')
@@ -73,6 +127,16 @@ const displayTopAbsents = computed(() => {
   }
   return topAbsents.value
 })
+
+const trendMonths = computed(() => monthlyRecapList.value.slice(-6))
+
+const barHeight = (m: Record<string, unknown>) => {
+  const rates = trendMonths.value.map(x => Number(x.rate) || 0)
+  const max = Math.max(5, ...rates)
+  const rate = Number(m.rate) || 0
+  const h = Math.round((rate / max) * 100)
+  return `${Math.max(8, h)}%`
+}
 
 const topAbsentStudent = computed(() => {
   const list = displayTopAbsents.value
@@ -165,35 +229,54 @@ const exportToExcel = async () => {
         </div>
 
         <div class="relative z-10 flex flex-col h-32 w-full">
+          <!-- Loading -->
+          <div
+            v-if="recapLoading"
+            class="flex-1 flex items-center justify-center gap-2 text-secondary text-xs"
+          >
+            <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+            Memuat data...
+          </div>
+
+          <!-- Error -->
+          <div
+            v-else-if="recapError"
+            class="flex-1 flex items-center justify-center text-rose-600 text-xs text-center px-4 leading-snug"
+          >
+            {{ recapError }}
+          </div>
+
+          <!-- Empty -->
+          <div
+            v-else-if="!trendMonths.length"
+            class="flex-1 flex items-center justify-center text-secondary text-xs text-center px-4"
+          >
+            Belum ada data rekap bulanan.
+          </div>
+
           <!-- Chart Bars -->
-          <div class="w-full h-full flex items-end gap-2 px-2 pb-6 border-b border-l border-surface-container-highest relative">
-            <div class="w-1/4 bg-primary/20 h-[70%] rounded-t-sm relative group cursor-pointer hover:bg-primary/30 transition-colors">
-              <div class="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-deep-black text-white text-[10px] py-1 px-2 rounded font-bold shadow-md z-20">
-                92%
+          <template v-else>
+            <div class="w-full h-full flex items-end gap-2 px-2 pb-6 border-b border-l border-surface-container-highest relative">
+              <div
+                v-for="m in trendMonths"
+                :key="'bar-' + String(m.month || m.Month)"
+                class="flex-1 bg-primary/40 rounded-t-sm relative group cursor-pointer hover:bg-primary/60 transition-colors"
+                :style="{ height: barHeight(m) }"
+              >
+                <div class="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-deep-black text-white text-[10px] py-1 px-2 rounded font-bold shadow-md z-20 whitespace-nowrap">
+                  {{ String(m.month || m.Month) }} · {{ m.rate || 0 }}% Hadir
+                </div>
               </div>
             </div>
-            <div class="w-1/4 bg-primary/40 h-[85%] rounded-t-sm relative group cursor-pointer hover:bg-primary/50 transition-colors">
-              <div class="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-deep-black text-white text-[10px] py-1 px-2 rounded font-bold shadow-md z-20">
-                94%
-              </div>
+            <div class="flex justify-between mt-2 font-label text-[10px] text-secondary w-full">
+              <span
+                v-for="m in trendMonths"
+                :key="'lbl-' + String(m.month || m.Month)"
+              >
+                {{ String(m.month || m.Month) }}
+              </span>
             </div>
-            <div class="w-1/4 bg-primary/60 h-[75%] rounded-t-sm relative group cursor-pointer hover:bg-primary/70 transition-colors">
-              <div class="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-deep-black text-white text-[10px] py-1 px-2 rounded font-bold shadow-md z-20">
-                91%
-              </div>
-            </div>
-            <div class="w-1/4 bg-primary h-[95%] rounded-t-sm relative group cursor-pointer hover:bg-primary-container transition-colors">
-              <div class="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-deep-black text-white text-[10px] py-1 px-2 rounded font-bold shadow-md z-20">
-                97%
-              </div>
-            </div>
-          </div>
-          <div class="flex justify-between mt-2 font-label text-[10px] text-secondary w-full">
-            <span>Week 1</span>
-            <span>Week 2</span>
-            <span>Week 3</span>
-            <span>Week 4</span>
-          </div>
+          </template>
         </div>
       </div>
 
@@ -291,7 +374,38 @@ const exportToExcel = async () => {
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter-grid">
         <!-- Top 10 List -->
         <div class="lg:col-span-2 bg-surface-white border border-surface-container-highest rounded-lg p-6 shadow-sm">
-          <ul class="divide-y divide-surface-container-highest">
+          <!-- Loading -->
+          <div
+            v-if="topAlfaLoading"
+            class="flex items-center justify-center gap-2 py-8 text-secondary text-sm"
+          >
+            <span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+            Memuat data top alfa...
+          </div>
+
+          <!-- Error -->
+          <div
+            v-else-if="topAlfaError && !displayTopAbsents.length"
+            class="flex items-center justify-center gap-2 py-8 text-rose-600 text-sm text-center"
+          >
+            <span class="material-symbols-outlined text-[18px]">error</span>
+            {{ topAlfaError }}
+          </div>
+
+          <!-- Empty -->
+          <div
+            v-else-if="!displayTopAbsents.length"
+            class="flex items-center justify-center gap-2 py-8 text-secondary text-sm"
+          >
+            <span class="material-symbols-outlined text-[18px]">person_off</span>
+            Belum ada data alpa.
+          </div>
+
+          <!-- List -->
+          <ul
+            v-else
+            class="divide-y divide-surface-container-highest"
+          >
             <li
               v-for="(student, index) in displayTopAbsents"
               :key="student.id"
@@ -313,6 +427,13 @@ const exportToExcel = async () => {
               </span>
             </li>
           </ul>
+          <p
+            v-if="topAlfaError && displayTopAbsents.length"
+            class="mt-3 text-[11px] text-amber-600 flex items-center gap-1"
+          >
+            <span class="material-symbols-outlined text-sm">warning</span>
+            Data server gagal dimuat, menampilkan data lokal. ({{ topAlfaError }})
+          </p>
         </div>
 
         <!-- Featured Most Absent Student Detail Card -->
@@ -377,6 +498,83 @@ const exportToExcel = async () => {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Attendance Logs Section -->
+    <div class="mb-stack-lg">
+      <h3 class="font-headline text-[24px] text-primary tracking-tight font-bold mb-4">
+        Riwayat Log Absensi
+      </h3>
+      <div class="bg-surface-white border border-surface-container-highest rounded-lg p-6 shadow-sm overflow-x-auto">
+        <!-- Loading -->
+        <div
+          v-if="logsLoading"
+          class="flex items-center justify-center gap-2 py-8 text-secondary text-sm"
+        >
+          <span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+          Memuat log absensi...
+        </div>
+
+        <!-- Error -->
+        <div
+          v-else-if="logsError"
+          class="flex items-center justify-center gap-2 py-8 text-rose-600 text-sm text-center"
+        >
+          <span class="material-symbols-outlined text-[18px]">error</span>
+          {{ logsError }}
+        </div>
+
+        <!-- Empty -->
+        <div
+          v-else-if="!attendanceLogsList.length"
+          class="flex items-center justify-center gap-2 py-8 text-secondary text-sm"
+        >
+          <span class="material-symbols-outlined text-[18px]">event_busy</span>
+          Tidak ada log absensi pada rentang tanggal ini.
+        </div>
+
+        <!-- Table -->
+        <table
+          v-else
+          class="w-full text-left text-sm"
+        >
+          <thead>
+            <tr class="bg-surface-container-low text-secondary uppercase text-[11px] tracking-wider border-b">
+              <th class="p-3 font-bold">
+                Nama Siswa
+              </th>
+              <th class="p-3 font-bold text-center">
+                Status
+              </th>
+              <th class="p-3 font-bold text-center">
+                Waktu
+              </th>
+              <th class="p-3 font-bold">
+                IP
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            <tr
+              v-for="log in attendanceLogsList"
+              :key="log.id"
+            >
+              <td class="p-3 font-bold text-deep-black">
+                {{ log.name }}
+              </td>
+              <td class="p-3 text-center">
+                <StatusBadge :status="String(log.status)" />
+              </td>
+              <td class="p-3 text-center text-secondary font-mono text-xs">
+                {{ log.time }}
+              </td>
+              <td class="p-3 text-secondary font-mono text-xs">
+                {{ log.ip || '-' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

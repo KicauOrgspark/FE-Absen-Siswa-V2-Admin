@@ -54,13 +54,18 @@ const fetchWithFilters = () => {
   })
 }
 
-// Reset ke halaman 1 saat filter / limit berubah
-watch([searchQuery, selectedGrade, selectedClass, selectedStatus, itemsPerPage], () => {
-  currentPage.value = 1
+// Debounce: refetch dari API saat page / filter / search / limit berubah (1 request saja)
+let filterTimer: ReturnType<typeof setTimeout> | null = null
+watch([searchQuery, selectedGrade, selectedClass, selectedStatus, currentPage, itemsPerPage], () => {
+  if (filterTimer) clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => {
+    if (currentPage.value !== 1) {
+      currentPage.value = 1
+      return
+    }
+    fetchWithFilters()
+  }, 300)
 })
-
-// Refetch dari API (server-side pagination & filter) saat page, filter, search, atau limit berubah
-watch([searchQuery, selectedGrade, selectedClass, selectedStatus, currentPage, itemsPerPage], fetchWithFilters)
 
 // Kalau total halaman mengecil (setelah delete/filter), mundur ke halaman yang valid
 watch(() => pagination.value.totalPages, (tp) => {

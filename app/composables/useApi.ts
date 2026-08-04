@@ -140,54 +140,70 @@ export const useApi = () => {
       console.log(`[useApi] ${options.method} ${endpoint} | token terkirim: ${token ? 'YA (' + token.length + ' chars)' : 'TIDAK (kosong)'} | cookie: ${tokenCookie.value ? 'ada' : 'kosong'} | localStorage: ${localStorage.getItem('token') ? 'ada' : 'kosong'}`)
     }
 
-    try {
-      const res = await $fetch<T>(url, {
-        method: options.method || 'GET',
-        query: options.params as Record<string, string | number | boolean>,
-        body: options.isFormData ? (options.body as BodyInit) : (options.body ? JSON.stringify(options.body) : undefined),
-        headers
-      })
+    const MAX_429_RETRIES = 3
+    const retryDelay = (attempt: number) => 1000 * 2 ** attempt + Math.random() * 500
 
-      return { data: res, error: null, status: 200 }
-    } catch (err: unknown) {
-      const errorObj = err as {
-        message?: string
-        status?: number
-        statusCode?: number
-        data?: { error?: string, message?: string }
-        response?: { status?: number, _data?: { error?: string, message?: string } }
-      }
-      const status = errorObj?.response?.status || errorObj?.status || errorObj?.statusCode || 500
-      const errMsg = extractApiErrorMessage(err)
+    let retryCount = 0
 
-      if (status === 204) {
-        return { data: null, error: null, status: 204 }
-      }
+    while (true) {
+      try {
+        const res = await $fetch<T>(url, {
+          method: options.method || 'GET',
+          query: options.params as Record<string, string | number | boolean>,
+          body: options.isFormData ? (options.body as BodyInit) : (options.body ? JSON.stringify(options.body) : undefined),
+          headers
+        })
 
-      const hadToken = !!getToken()
-      const isAuthError = hadToken && (status === 401 || status === 403)
+        return { data: res, error: null, status: 200 }
+      } catch (err: unknown) {
+        const errorObj = err as {
+          message?: string
+          status?: number
+          statusCode?: number
+          data?: { error?: string, message?: string }
+          response?: { status?: number, _data?: { error?: string, message?: string } }
+        }
+        const status = errorObj?.response?.status || errorObj?.status || errorObj?.statusCode || 500
 
-      if (isAuthError && import.meta.client) {
-        tokenCookie.value = null
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
+        if (status === 429 && import.meta.client && retryCount < MAX_429_RETRIES) {
+          retryCount++
+          const delay = retryDelay(retryCount)
+          console.warn(`[useApi] Rate limit (429) untuk ${url}, retry ${retryCount}/${MAX_429_RETRIES} dalam ${Math.round(delay)}ms...`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
 
-        const currentPath = window.location.pathname
-        if (currentPath !== '/login') {
-          window.location.href = '/login'
-          return {
-            data: null,
-            error: new Error('missing authorization header'),
-            status: 401
+        const errMsg = extractApiErrorMessage(err)
+
+        if (status === 204) {
+          return { data: null, error: null, status: 204 }
+        }
+
+        const hadToken = !!getToken()
+        const isAuthError = hadToken && (status === 401 || status === 403)
+
+        if (isAuthError && import.meta.client) {
+          tokenCookie.value = null
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+
+          const currentPath = window.location.pathname
+          if (currentPath !== '/login') {
+            window.location.href = '/login'
+            return {
+              data: null,
+              error: new Error('missing authorization header'),
+              status: 401
+            }
           }
         }
-      }
 
-      console.warn(`[useApi] Request failed for ${url}:`, errMsg)
-      return {
-        data: null,
-        error: new Error(errMsg),
-        status
+        console.warn(`[useApi] Request failed for ${url}:`, errMsg)
+        return {
+          data: null,
+          error: new Error(errMsg),
+          status
+        }
       }
     }
   }

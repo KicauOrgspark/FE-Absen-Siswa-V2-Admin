@@ -115,6 +115,7 @@ export const useAttendance = () => {
     totalStudents: 0,
     totalAbsenHariIni: 0,
     hadirCount: 0,
+    telatCount: 0,
     sakitCount: 0,
     alpaCount: 0,
     izinCount: 0
@@ -163,6 +164,10 @@ export const useAttendance = () => {
     total: 0,
     totalPages: 1
   }))
+
+  const hasMoreStudents = useState<boolean>('hasMoreStudents', () => false)
+  const nextStudentPage = useState<number>('nextStudentPage', () => 2)
+  const lastStudentFilters = useState<Record<string, unknown>>('lastStudentFilters', () => ({}))
 
   const extractTotalFromResponse = (resData: unknown): number => {
     if (!resData || typeof resData !== 'object') return 0
@@ -249,12 +254,49 @@ export const useAttendance = () => {
     }
   }
 
+  const mapStudentItem = (item: Record<string, unknown>): Student => {
+    const cls = String(item.class_group || item.class || 'X DKV-1')
+    const sId = String(item.id || item.user_id || '')
+
+    let status = 'Belum Absen'
+    let time = '-'
+
+    if (item.attendance_status || item.presensi_status || item.attendanceStatus) {
+      status = normalizeStatus(String(item.attendance_status || item.presensi_status || item.attendanceStatus))
+      const rawTime = String(item.time || item.clock_in_time || item.created_at || '-')
+      if (rawTime && rawTime !== '-' && (rawTime.includes('T') || rawTime.includes(' '))) {
+        const timePart = rawTime.split(/[T ]/)[1]
+        time = timePart ? timePart.substring(0, 5) : rawTime
+      } else {
+        time = rawTime
+      }
+    }
+
+    return {
+      id: sId || `std-${Math.random()}`,
+      nisn: String(item.nisn || item.username || '-'),
+      name: String(item.full_name || item.name || 'Siswa'),
+      username: String(item.username || ''),
+      email: String(item.email || ''),
+      parentName: String(item.parent_name || ''),
+      parentPhone: String(item.parent_phone || ''),
+      class: cls,
+      major: String(item.jurusan || item.major || getMajorFromClass(cls)),
+      grade: String(item.angkatan || item.grade || getGradeFromClass(cls)),
+      time,
+      status,
+      activeStatus: normalizeActiveStatus(item.active_status ?? item.status_keaktifan ?? item.status),
+      alpaCount: Number(item.alpa_count || item.total_alfa || 0),
+      avatarInitials: getInitials(String(item.full_name || item.name || ''))
+    }
+  }
+
   const fetchAttendanceStudents = async (filters?: { class_group?: string, status?: string, angkatan?: string, jurusan?: string, search?: string, page?: number, limit?: number }) => {
     isFetching.value = true
 
-    // 1. Fetch users (students) list with configurable page & limit (set from frontend)
+    // Default limit 50 sesuai max limit BE. Halaman berikutnya dimuat bertahap (lazy load).
     const page = filters?.page || 1
-    const limit = filters?.limit ?? 500
+    const limit = filters?.limit ?? 50
     const paramsBase = {
       role: 'siswa',
       class_group: filters?.class_group,
@@ -265,7 +307,7 @@ export const useAttendance = () => {
     const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
       params: { page, limit, ...paramsBase }
     })
-    let userList = extractList(usersData)
+    const userList = extractList(usersData)
     const serverTotal = extractTotalFromResponse(usersData)
     const totalPages = extractTotalPagesFromResponse(usersData)
 
@@ -275,77 +317,40 @@ export const useAttendance = () => {
       totalStudentsCount.value = userList.length
     }
 
-    if (!userList.length) {
-      const { data: fallbackData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
-        params: { page, limit, class_group: filters?.class_group, angkatan: filters?.angkatan, search: filters?.search }
-      })
-      userList = extractList(fallbackData)
-      const fallbackTotal = extractTotalFromResponse(fallbackData)
-      if (fallbackTotal > 0) {
-        totalStudentsCount.value = fallbackTotal
-      }
-    }
-
-    // Auto-fetch ALL remaining pages in controlled batches of 5 requests to get 100% of students without 429 rate limit
-    if (totalPages > 1 && userList.length < serverTotal && !filters?.page) {
-      const BATCH_SIZE = 5
-      for (let p = 2; p <= totalPages; p += BATCH_SIZE) {
-        const batchPromises = []
-        const maxP = Math.min(p + BATCH_SIZE - 1, totalPages)
-        for (let currentP = p; currentP <= maxP; currentP++) {
-          batchPromises.push(
-            fetchApi<Record<string, unknown>>('/api/v1/users', {
-              params: { page: currentP, limit, ...paramsBase }
-            })
-          )
-        }
-        const batchResponses = await Promise.all(batchPromises)
-        batchResponses.forEach((res) => {
-          if (res.data) {
-            userList = userList.concat(extractList(res.data))
-          }
-        })
-      }
-    }
+    lastStudentFilters.value = { ...paramsBase, limit }
+    nextStudentPage.value = page + 1
+    hasMoreStudents.value = totalPages > page && userList.length > 0 && (serverTotal === 0 || userList.length < serverTotal)
 
     applyPaginationMeta(usersData, page, limit, Math.max(serverTotal, userList.length))
 
-    students.value = userList.map((item: Record<string, unknown>) => {
-      const cls = String(item.class_group || item.class || 'X DKV-1')
-      const sId = String(item.id || item.user_id || '')
+    students.value = userList.map(mapStudentItem).sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }))
+    isFetching.value = false
+  }
 
-      let status = 'Belum Absen'
-      let time = '-'
+  const loadMoreStudents = async () => {
+    if (!hasMoreStudents.value || isFetching.value) return
+    isFetching.value = true
 
-      if (item.attendance_status || item.presensi_status || item.attendanceStatus) {
-        status = normalizeStatus(String(item.attendance_status || item.presensi_status || item.attendanceStatus))
-        const rawTime = String(item.time || item.clock_in_time || item.created_at || '-')
-        if (rawTime && rawTime !== '-' && (rawTime.includes('T') || rawTime.includes(' '))) {
-          const timePart = rawTime.split(/[T ]/)[1]
-          time = timePart ? timePart.substring(0, 5) : rawTime
-        } else {
-          time = rawTime
-        }
+    const page = nextStudentPage.value
+    const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
+      params: { page, ...lastStudentFilters.value }
+    })
+
+    if (!error) {
+      const existingIds = new Set(students.value.map(s => s.id))
+      const newList = extractList(data)
+        .map(mapStudentItem)
+        .filter(s => !existingIds.has(s.id))
+
+      if (newList.length) {
+        students.value = [...students.value, ...newList].sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }))
       }
 
-      return {
-        id: sId || `std-${Math.random()}`,
-        nisn: String(item.nisn || item.username || '-'),
-        name: String(item.full_name || item.name || 'Siswa'),
-        username: String(item.username || ''),
-        email: String(item.email || ''),
-        parentName: String(item.parent_name || ''),
-        parentPhone: String(item.parent_phone || ''),
-        class: cls,
-        major: String(item.jurusan || item.major || getMajorFromClass(cls)),
-        grade: String(item.angkatan || item.grade || getGradeFromClass(cls)),
-        time,
-        status,
-        activeStatus: normalizeActiveStatus(item.active_status ?? item.status_keaktifan ?? item.status),
-        alpaCount: Number(item.alpa_count || item.total_alfa || 0),
-        avatarInitials: getInitials(String(item.full_name || item.name || ''))
-      }
-    }).sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }))
+      const totalPages = extractTotalPagesFromResponse(data)
+      nextStudentPage.value = page + 1
+      hasMoreStudents.value = totalPages > page && newList.length > 0
+    }
+
     isFetching.value = false
   }
 
@@ -406,30 +411,12 @@ export const useAttendance = () => {
       }
     })
 
-    let list = extractList(data)
+    const list = extractList(data)
     const serverTotal = extractTotalFromResponse(data)
     if (serverTotal > 0) {
       totalStudentsCount.value = serverTotal
     } else if (list.length > 0) {
       totalStudentsCount.value = list.length
-    }
-
-    // Fallback: If filtering by role='siswa' returns empty, retry without role filter to get DB users
-    if (!list.length) {
-      const { data: fallbackData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
-        params: {
-          page,
-          limit,
-          class_group: params.class_group,
-          angkatan: params.angkatan,
-          search: params.search
-        }
-      })
-      list = extractList(fallbackData)
-      const fallbackTotal = extractTotalFromResponse(fallbackData)
-      if (fallbackTotal > 0) {
-        totalStudentsCount.value = fallbackTotal
-      }
     }
     isFetching.value = false
 
@@ -631,9 +618,11 @@ export const useAttendance = () => {
     topAbsents,
     totalStudentsCount,
     pagination: paginationMeta,
+    hasMoreStudents,
     fetchDashboardStats,
     fetchDashboardTrend,
     fetchAttendanceStudents,
+    loadMoreStudents,
     fetchClassesList,
     fetchUsers,
     updateStudentStatus,

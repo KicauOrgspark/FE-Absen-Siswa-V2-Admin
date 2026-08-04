@@ -16,11 +16,12 @@ const activeToken = ref<{
 const tokenList = ref<Record<string, unknown>[]>([])
 const autoPollInterval = ref<ReturnType<typeof setInterval> | null>(null)
 const lastSyncTime = ref<string>('-')
+const lastRenderedToken = ref('')
 
 const fetchActiveTokenFromServer = async () => {
   isLoading.value = true
   let res = await fetchApi<Record<string, unknown>>('/api/v1/token/qr_code/active')
-  if (!res.data) {
+  if (!res.data && res.status === 404) {
     res = await fetchApi<Record<string, unknown>>('/api/v1/token/active')
   }
   isLoading.value = false
@@ -55,8 +56,14 @@ const fetchActiveTokenFromServer = async () => {
     activeToken.value = null
   }
 
-  await nextTick()
-  await renderIndustryStandardQR()
+  const newCode = activeToken.value?.token_code || ''
+  if (newCode && newCode !== lastRenderedToken.value) {
+    lastRenderedToken.value = newCode
+    await nextTick()
+    await renderIndustryStandardQR()
+  } else if (!newCode) {
+    lastRenderedToken.value = ''
+  }
 }
 
 const renderIndustryStandardQR = async () => {
@@ -106,20 +113,41 @@ const handleDownloadQR = () => {
   link.click()
 }
 
+const POLL_INTERVAL = 30_000
+
+const startPolling = () => {
+  stopPolling()
+  autoPollInterval.value = setInterval(() => {
+    fetchActiveTokenFromServer()
+  }, POLL_INTERVAL)
+}
+
+const stopPolling = () => {
+  if (autoPollInterval.value) {
+    clearInterval(autoPollInterval.value)
+    autoPollInterval.value = null
+  }
+}
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    fetchActiveTokenFromServer()
+    startPolling()
+  } else {
+    stopPolling()
+  }
+}
+
 onMounted(() => {
   fetchActiveTokenFromServer()
   fetchTokensList()
-
-  // Auto-polling every 5 seconds to sync with server-generated Postman tokens
-  autoPollInterval.value = setInterval(() => {
-    fetchActiveTokenFromServer()
-  }, 5000)
+  startPolling()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
-  if (autoPollInterval.value) {
-    clearInterval(autoPollInterval.value)
-  }
+  stopPolling()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 
