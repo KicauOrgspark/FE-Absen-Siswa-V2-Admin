@@ -54,6 +54,20 @@ const fetchWithFilters = () => {
   })
 }
 
+// Menyesuaikan daftar kelas berdasarkan angkatan yang dipilih
+const filteredClasses = computed(() => {
+  return availableClasses.value.filter((c) => {
+    const clsName = typeof c === 'string' ? c.toUpperCase() : String(c).toUpperCase()
+    if (!selectedGrade.value) return true
+    return clsName.startsWith(selectedGrade.value + ' ') || clsName.startsWith(selectedGrade.value + '-')
+  })
+})
+
+// Reset kelas ke 'Semua' jika angkatan berubah
+watch(selectedGrade, () => {
+  selectedClass.value = ''
+})
+
 // Debounce: refetch dari API saat page / filter / search / limit berubah (1 request saja)
 let filterTimer: ReturnType<typeof setTimeout> | null = null
 watch([searchQuery, selectedGrade, selectedClass, selectedStatus, currentPage, itemsPerPage], () => {
@@ -266,7 +280,7 @@ const handleResetPasswordSubmit = async () => {
                 Semua Kelas
               </option>
               <option
-                v-for="cls in availableClasses"
+                v-for="cls in filteredClasses"
                 :key="cls.id || cls.name || cls"
                 :value="cls.name || cls.class_name || cls"
               >

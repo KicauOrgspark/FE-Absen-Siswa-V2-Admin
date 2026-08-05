@@ -4,6 +4,7 @@ const {
   stats,
   totalStudentsCount,
   availableClasses,
+  pagination,
   hasMoreStudents,
   fetchDashboardStats,
   fetchAttendanceStudents,
@@ -51,9 +52,8 @@ const setupLoadMoreObserver = () => {
 
 onMounted(async () => {
   await Promise.all([
-    fetchDashboardStats(),
     fetchClassesList(),
-    fetchAttendanceStudents()
+    applyFilters()
   ])
   await nextTick()
   setupLoadMoreObserver()
@@ -64,65 +64,55 @@ onUnmounted(() => {
 })
 
 const applyFilters = () => {
-  fetchAttendanceStudents({
+  const filters = {
     angkatan: selectedYear.value !== 'Semua' ? selectedYear.value : undefined,
     jurusan: selectedMajor.value !== 'Semua' ? selectedMajor.value : undefined,
-    class_group: selectedClass.value !== 'Semua' ? selectedClass.value : undefined
-  })
+    class_group: selectedClass.value !== 'Semua' ? selectedClass.value : undefined,
+    status: selectedStatus.value !== 'Semua' ? selectedStatus.value : undefined,
+    search: searchQuery.value.trim() || undefined,
+    page: currentPage.value,
+    limit: itemsPerPage.value
+  }
+  fetchAttendanceStudents(filters)
+  fetchDashboardStats(filters)
 }
+
+// Menyesuaikan daftar kelas berdasarkan jurusan dan angkatan yang dipilih
+const filteredClasses = computed(() => {
+  return availableClasses.value.filter((c) => {
+    const clsName = typeof c === 'string' ? c.toUpperCase() : String(c).toUpperCase();
+    
+    // Filter Jurusan
+    const matchMajor = selectedMajor.value === 'Semua' || clsName.includes(selectedMajor.value.toUpperCase());
+    
+    // Filter Angkatan
+    const matchYear = selectedYear.value === 'Semua' || 
+                      clsName.startsWith(selectedYear.value + ' ') || 
+                      clsName.startsWith(selectedYear.value + '-');
+                      
+    return matchMajor && matchYear;
+  });
+})
+
+// Reset kelas ke 'Semua' jika jurusan atau angkatan berubah
+watch([selectedMajor, selectedYear], () => {
+  selectedClass.value = 'Semua'
+})
 
 let filterTimer: ReturnType<typeof setTimeout> | null = null
 
 watch([searchQuery, selectedYear, selectedMajor, selectedClass, selectedStatus, itemsPerPage], () => {
   currentPage.value = 1
-})
-
-watch([selectedYear, selectedMajor, selectedClass], () => {
   if (filterTimer) clearTimeout(filterTimer)
   filterTimer = setTimeout(applyFilters, 300)
 })
 
-const normalizeClassStr = (c: string) => String(c || '').toLowerCase().replace(/[-_ ]/g, '')
-
-// Base filtered students by Grade (Angkatan), Major (Jurusan), and Class (Kelas)
-const baseFilteredStudents = computed(() => {
-  return students.value.filter((s) => {
-    const matchesYear = selectedYear.value === 'Semua' || s.grade === selectedYear.value
-    const matchesMajor = selectedMajor.value === 'Semua' || s.major === selectedMajor.value
-    const matchesClass = selectedClass.value === 'Semua'
-      || s.class === selectedClass.value
-      || normalizeClassStr(s.class) === normalizeClassStr(selectedClass.value)
-    return matchesYear && matchesMajor && matchesClass
-  })
-})
-
-// Final filtered students (adds Search query and Status filter on top of baseFilteredStudents)
-const filteredStudents = computed(() => {
-  return baseFilteredStudents.value.filter((s) => {
-    const q = searchQuery.value.trim().toLowerCase()
-    const matchesSearch = !q || s.name.toLowerCase().includes(q) || s.nisn.toLowerCase().includes(q)
-
-    let matchesStatus = true
-    if (selectedStatus.value !== 'Semua') {
-      const target = selectedStatus.value.toLowerCase()
-      const current = (s.status || '').toLowerCase()
-      if (target === 'alpa' || target === 'alfa') {
-        matchesStatus = current === 'alpa' || current === 'alfa'
-      } else {
-        matchesStatus = current === target
-      }
-    }
-
-    return matchesSearch && matchesStatus
-  })
-})
-
 const paginatedStudents = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value
-  return filteredStudents.value.slice(start, start + itemsPerPage.value)
+  return students.value.slice(start, start + itemsPerPage.value)
 })
 
-const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1)
+const totalPages = computed(() => Math.ceil(students.value.length / itemsPerPage.value) || 1)
 
 const resetFilters = () => {
   searchQuery.value = ''
@@ -131,37 +121,13 @@ const resetFilters = () => {
   selectedClass.value = 'Semua'
   selectedStatus.value = 'Semua'
   currentPage.value = 1
-  fetchAttendanceStudents()
+  // applyFilters will be triggered by watch
 }
-
-const displayStats = computed(() => {
-  const isClassOrYearFiltered = selectedYear.value !== 'Semua' || selectedMajor.value !== 'Semua' || selectedClass.value !== 'Semua'
-  const list = baseFilteredStudents.value
-  const totalAbsen = list.filter(s => s.status?.toLowerCase() !== 'belum absen' && s.status?.toLowerCase() !== 'belum_absen').length
-  const hadirTepat = list.filter(s => s.status?.toLowerCase() === 'hadir').length
-  const telat = list.filter(s => s.status?.toLowerCase() === 'telat' || s.status?.toLowerCase() === 'terlambat').length
-  const sakit = list.filter(s => s.status?.toLowerCase() === 'sakit').length
-  const izin = list.filter(s => s.status?.toLowerCase() === 'izin').length
-  const alpa = list.filter(s => s.status?.toLowerCase() === 'alpa' || s.status?.toLowerCase() === 'alfa').length
-
-  const serverTotal = totalStudentsCount.value || stats.value.totalStudents
-
-  return {
-    totalStudents: isClassOrYearFiltered ? list.length : (serverTotal || list.length),
-    totalAbsenHariIni: isClassOrYearFiltered ? totalAbsen : Math.max(stats.value.totalAbsenHariIni, totalAbsen),
-    hadirCount: isClassOrYearFiltered ? (hadirTepat + telat) : Math.max(stats.value.hadirCount, hadirTepat + telat),
-    hadirTepatCount: isClassOrYearFiltered ? hadirTepat : Math.max(stats.value.hadirTepatCount, hadirTepat),
-    telatCount: isClassOrYearFiltered ? telat : Math.max(stats.value.telatCount, telat),
-    sakitCount: isClassOrYearFiltered ? sakit : Math.max(stats.value.sakitCount, sakit),
-    alpaCount: isClassOrYearFiltered ? alpa : Math.max(stats.value.alpaCount, alpa),
-    izinCount: isClassOrYearFiltered ? izin : Math.max(stats.value.izinCount, izin)
-  }
-})
 
 const departmentStats = computed(() => {
   const majors: Array<'RPL' | 'TKJ' | 'DKV' | 'LPB' | 'TOI'> = ['RPL', 'TKJ', 'DKV', 'LPB', 'TOI']
   return majors.map((m) => {
-    const list = baseFilteredStudents.value.filter(s => s.major === m)
+    const list = students.value.filter(s => s.major === m)
     if (!list.length) return { major: m, percentage: 0 }
     const present = list.filter(s => s.status?.toLowerCase() === 'hadir' || s.status?.toLowerCase() === 'telat').length
     const percentage = Math.round((present / list.length) * 100)
@@ -200,27 +166,27 @@ const handleStatusChange = async (studentId: string, status: string, studentName
     <div class="grid grid-cols-2 md:grid-cols-4 gap-gutter-grid">
       <BentoStatCard
         title="Total Students"
-        :value="displayStats.totalStudents.toLocaleString('id-ID')"
+        :value="stats.totalStudents.toLocaleString('id-ID')"
         icon="school"
       />
       <BentoStatCard
         title="Total Absen Hari Ini"
-        :value="displayStats.totalAbsenHariIni"
+        :value="stats.totalAbsenHariIni"
         icon="group"
       />
       <BentoStatCard
         title="Hadir & Telat"
-        :value="displayStats.hadirCount"
+        :value="stats.hadirCount"
         icon="how_to_reg"
         accent-color="green"
         :sub-badges="[
-          { text: `+${displayStats.hadirTepatCount ?? displayStats.hadirCount} Tepat`, color: '#00875a' },
-          { text: `+${displayStats.telatCount ?? 0} Telat`, color: '#ea580c' }
+          { text: `+${stats.hadirTepatCount ?? stats.hadirCount} Tepat`, color: '#00875a' },
+          { text: `+${stats.telatCount ?? 0} Telat`, color: '#ea580c' }
         ]"
       />
       <BentoStatCard
         title="Alpa"
-        :value="displayStats.alpaCount"
+        :value="stats.alpaCount"
         icon="person_off"
         accent-color="red"
       />
@@ -309,23 +275,11 @@ const handleStatusChange = async (studentId: string, status: string, studentName
               Semua
             </option>
             <option
-              v-for="cls in availableClasses"
-              :key="cls.id || cls.name || cls"
-              :value="cls.name || cls.class_name || cls"
+              v-for="c in filteredClasses"
+              :key="c"
+              :value="c"
             >
-              {{ cls.name || cls.class_name || cls }}
-            </option>
-            <option value="X DKV-1">
-              X DKV-1
-            </option>
-            <option value="X RPL 1">
-              X RPL 1
-            </option>
-            <option value="XI TKJ 2">
-              XI TKJ 2
-            </option>
-            <option value="XII TOI 1">
-              XII TOI 1
+              {{ c }}
             </option>
           </select>
         </div>
@@ -445,11 +399,10 @@ const handleStatusChange = async (studentId: string, status: string, studentName
         </table>
       </div>
 
-      <!-- Pagination -->
       <div class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary">
         <div class="flex flex-wrap items-center gap-4">
           <span>
-            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }} siswa
+            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, students.length) }} dari {{ students.length }} siswa
           </span>
           <div class="flex items-center gap-2">
             <span class="text-xs font-label">Tampilkan:</span>

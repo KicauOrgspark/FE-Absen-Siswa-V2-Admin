@@ -219,9 +219,22 @@ export const useAttendance = () => {
     }
   }
 
-  const fetchDashboardStats = async (filters?: { angkatan?: string, class_group?: string }) => {
+  const fetchDashboardStats = async (filters?: { angkatan?: string, class_group?: string, jurusan?: string, status?: string, search?: string }) => {
+    let apiStatus = filters?.status
+    if (apiStatus && apiStatus !== 'Semua') {
+      apiStatus = apiStatus.toLowerCase()
+      if (apiStatus === 'alpa') apiStatus = 'alfa'
+      if (apiStatus === 'belum absen') apiStatus = 'belum_absen'
+    }
+
     const { data } = await fetchApi<Record<string, unknown>>('/api/v1/dashboard', {
-      params: { angkatan: filters?.angkatan, class_group: filters?.class_group }
+      params: {
+        angkatan: filters?.angkatan,
+        class_group: filters?.class_group,
+        jurusan: filters?.jurusan,
+        status: apiStatus,
+        search: filters?.search
+      }
     })
     if (data) {
       const resObj = (data.data && typeof data.data === 'object' ? data.data : data) as Record<string, unknown>
@@ -297,14 +310,23 @@ export const useAttendance = () => {
     // Default limit 50 sesuai max limit BE. Halaman berikutnya dimuat bertahap (lazy load).
     const page = filters?.page || 1
     const limit = filters?.limit ?? 50
-    const paramsBase = {
-      role: 'siswa',
-      class_group: filters?.class_group,
-      angkatan: filters?.angkatan,
-      search: filters?.search
+
+    let apiStatus = filters?.status
+    if (apiStatus && apiStatus !== 'Semua') {
+      apiStatus = apiStatus.toLowerCase()
+      if (apiStatus === 'alpa') apiStatus = 'alfa'
+      if (apiStatus === 'belum absen') apiStatus = 'belum_absen'
     }
 
-    const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
+    const paramsBase = {
+      class_group: filters?.class_group,
+      angkatan: filters?.angkatan,
+      jurusan: filters?.jurusan,
+      search: filters?.search,
+      status: apiStatus
+    }
+
+    const { data: usersData } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/students', {
       params: { page, limit, ...paramsBase }
     })
     const userList = extractList(usersData)
@@ -332,7 +354,7 @@ export const useAttendance = () => {
     isFetching.value = true
 
     const page = nextStudentPage.value
-    const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
+    const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/students', {
       params: { page, ...lastStudentFilters.value }
     })
 
@@ -395,10 +417,20 @@ export const useAttendance = () => {
     return { success: false, message: 'Siswa tidak ditemukan.' }
   }
 
-  const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string, status?: string, angkatan?: string } = {}) => {
+  const fetchUsers = async (params: { page?: number, limit?: number, role?: string, class_group?: string, search?: string, status?: string, angkatan?: string, jurusan?: string } = {}) => {
     isFetching.value = true
     const page = params.page || 1
     const limit = params.limit || 50
+    
+    let apiStatus = params.status && params.status !== 'Semua' ? params.status : undefined
+    if (apiStatus) {
+      if (apiStatus.toUpperCase() === 'NON AKTIF') {
+        apiStatus = 'NONAKTIF'
+      } else {
+        apiStatus = apiStatus.toUpperCase()
+      }
+    }
+
     const { data } = await fetchApi<Record<string, unknown>>('/api/v1/users', {
       params: {
         page,
@@ -406,8 +438,9 @@ export const useAttendance = () => {
         role: params.role || 'siswa',
         class_group: params.class_group,
         angkatan: params.angkatan,
+        jurusan: params.jurusan,
         search: params.search,
-        status: params.status
+        status: apiStatus
       }
     })
 

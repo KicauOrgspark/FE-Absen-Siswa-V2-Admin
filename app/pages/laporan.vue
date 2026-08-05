@@ -6,8 +6,8 @@ const { fetchApi, getExportUrl } = useApi()
 
 const fromDate = ref('2026-07-01')
 const toDate = ref('2026-07-30')
-const selectedGrade = ref('Grade X')
-const selectedMajor = ref('All Majors')
+const selectedGrade = ref('Semua Kelas')
+const selectedMajor = ref('Semua Jurusan')
 const searchQuery = ref('')
 
 const serverTopAlfaList = ref<Record<string, unknown>[]>([])
@@ -70,7 +70,8 @@ const fetchAttendanceLogs = async () => {
       limit: 20,
       start_date: fromDate.value,
       end_date: toDate.value,
-      class_group: selectedGrade.value !== 'Grade X' ? selectedGrade.value : undefined,
+      angkatan: selectedGrade.value !== 'Semua Kelas' ? selectedGrade.value : undefined,
+      jurusan: selectedMajor.value !== 'Semua Jurusan' ? selectedMajor.value : undefined,
       search: searchQuery.value || undefined
     }
   })
@@ -164,15 +165,13 @@ const { showError, showSuccess, showInfo } = useAppToast()
 const exportToExcel = async () => {
   isExporting.value = true
   showInfo('Memulai penyiapan file laporan Excel...')
-  const angkatan = selectedGrade.value !== 'Semua' && selectedGrade.value !== 'All Grades' ? selectedGrade.value : undefined
-  const kelas = selectedGrade.value !== 'Grade X' && selectedGrade.value !== 'Semua' ? selectedGrade.value : undefined
-  const jurusan = selectedMajor.value !== 'All Majors' && selectedMajor.value !== 'Semua' ? selectedMajor.value : undefined
+  const angkatan = selectedGrade.value !== 'Semua Kelas' ? selectedGrade.value : undefined
+  const jurusan = selectedMajor.value !== 'Semua Jurusan' ? selectedMajor.value : undefined
 
   const { getToken } = useApi()
   const token = getToken()
   const exportUrl = getExportUrl('/api/v1/export/attendance', {
     angkatan,
-    kelas,
     jurusan,
     start_date: fromDate.value,
     end_date: toDate.value
@@ -310,14 +309,17 @@ const exportToExcel = async () => {
               v-model="selectedGrade"
               class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-30 cursor-pointer"
             >
-              <option value="Grade X">
-                Grade X
+              <option value="Semua Kelas">
+                Semua Kelas
               </option>
-              <option value="Grade XI">
-                Grade XI
+              <option value="X">
+                Kelas X
               </option>
-              <option value="Grade XII">
-                Grade XII
+              <option value="XI">
+                Kelas XI
+              </option>
+              <option value="XII">
+                Kelas XII
               </option>
             </select>
             <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
@@ -329,8 +331,8 @@ const exportToExcel = async () => {
               v-model="selectedMajor"
               class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-40 cursor-pointer"
             >
-              <option value="All Majors">
-                All Majors
+              <option value="Semua Jurusan">
+                Semua Jurusan
               </option>
               <option value="DKV">
                 DKV
