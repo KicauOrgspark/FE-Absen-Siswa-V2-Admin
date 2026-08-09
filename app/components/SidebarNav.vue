@@ -3,6 +3,7 @@ const route = useRoute()
 const { logout } = useAuth()
 
 const isCollapsed = ref(false)
+const isEasterEggOpen = useState('easterEggOpen', () => false)
 
 const navItems = [
   { label: 'Dashboard', path: '/', icon: 'grid_view' },
@@ -95,9 +96,11 @@ const isActive = (path: string) => {
     <!-- Footer Credits -->
     <div
       v-if="!isCollapsed"
-      class="px-gutter-grid mt-auto pt-6 border-t border-surface-container-highest text-center"
+      class="px-gutter-grid mt-auto pt-6 border-t border-surface-container-highest text-center cursor-pointer group hover:bg-surface-container-low/50 py-2 rounded-lg transition-colors"
+      title="Lihat Tim Pengembang"
+      @click="isEasterEggOpen = true"
     >
-      <p class="font-label text-[10px] text-muted-text leading-relaxed">
+      <p class="font-label text-[10px] text-muted-text group-hover:text-primary transition-colors leading-relaxed">
         © 2026 SMK Plus Pelita Nusantara.<br>
         All rights reserved.<br>
         Developed by KicawOrgspark<br>

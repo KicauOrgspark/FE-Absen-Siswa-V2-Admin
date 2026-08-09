@@ -35,5 +35,6 @@ const getPageTitle = computed(() => {
     </main>
 
     <ToastContainer />
+    <EasterEggModal />
   </div>
 </template>
