@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { normalizeStatus } from '~/composables/useAttendance'
-
 const { topAbsents } = useAttendance()
 const { fetchApi, getExportUrl } = useApi()
 
@@ -8,19 +6,15 @@ const fromDate = ref('2026-07-01')
 const toDate = ref('2026-07-30')
 const selectedGrade = ref('Semua Kelas')
 const selectedMajor = ref('Semua Jurusan')
-const searchQuery = ref('')
 
 const serverTopAlfaList = ref<Record<string, unknown>[]>([])
 const monthlyRecapList = ref<Record<string, unknown>[]>([])
-const attendanceLogsList = ref<Record<string, unknown>[]>([])
 const isExporting = ref(false)
 
 const topAlfaLoading = ref(true)
 const topAlfaError = ref('')
 const recapLoading = ref(true)
 const recapError = ref('')
-const logsLoading = ref(true)
-const logsError = ref('')
 
 const fetchTopAlfa = async () => {
   topAlfaLoading.value = true
@@ -49,7 +43,11 @@ const fetchMonthlyRecap = async () => {
   recapLoading.value = true
   recapError.value = ''
   const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/monthly-recap', {
-    params: { year: academicYear.value }
+    params: {
+      year: academicYear.value,
+      angkatan: selectedGrade.value !== 'Semua Kelas' ? selectedGrade.value : undefined,
+      jurusan: selectedMajor.value !== 'Semua Jurusan' ? selectedMajor.value : undefined
+    }
   })
   const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
   if (list) {
@@ -61,54 +59,13 @@ const fetchMonthlyRecap = async () => {
   recapLoading.value = false
 }
 
-const fetchAttendanceLogs = async () => {
-  logsLoading.value = true
-  logsError.value = ''
-  const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
-    params: {
-      page: 1,
-      limit: 20,
-      start_date: fromDate.value,
-      end_date: toDate.value,
-      angkatan: selectedGrade.value !== 'Semua Kelas' ? selectedGrade.value : undefined,
-      jurusan: selectedMajor.value !== 'Semua Jurusan' ? selectedMajor.value : undefined,
-      search: searchQuery.value || undefined
-    }
-  })
-  const list = Array.isArray((data?.data as Record<string, unknown> | undefined)?.logs)
-    ? (data.data as Record<string, unknown>).logs
-    : Array.isArray(data?.data)
-      ? data.data
-      : null
-  if (list) {
-    attendanceLogsList.value = (list as Record<string, unknown>[]).map((log, idx) => {
-      const user = log.user as Record<string, unknown> | undefined
-      const rawTime = String(log.clock_in_time || log.created_at || '-')
-      return {
-        id: String(log.id ?? idx),
-        name: String(user?.full_name || user?.name || '-'),
-        status: normalizeStatus(String(log.status || 'Belum Absen')),
-        ip: String(log.captured_ip || log.CapturedIp || ''),
-        time: rawTime
-      }
-    })
-  } else {
-    attendanceLogsList.value = []
-  }
-  if (error) {
-    logsError.value = error.message || 'Gagal memuat log absensi.'
-  }
-  logsLoading.value = false
-}
-
 onMounted(() => {
   fetchTopAlfa()
   fetchMonthlyRecap()
-  fetchAttendanceLogs()
 })
 
 watch([fromDate, toDate, selectedGrade, selectedMajor], () => {
-  fetchAttendanceLogs()
+  fetchMonthlyRecap()
 })
 
 const displayTopAbsents = computed(() => {
@@ -129,15 +86,39 @@ const displayTopAbsents = computed(() => {
   return topAbsents.value
 })
 
-const trendMonths = computed(() => monthlyRecapList.value.slice(-6))
+const trendMonths = computed(() => {
+  if (!monthlyRecapList.value.length) return []
+  return monthlyRecapList.value.slice(-6).map((m) => {
+    const rate = Math.min(100, Math.max(0, Math.round(Number(m.rate ?? m.hadir_rate ?? m.percentage ?? 0))))
+    const hadir = Number(m.hadir ?? m.hadir_count ?? 0)
+    const telat = Number(m.telat ?? m.telat_count ?? 0)
+    const sakit = Number(m.sakit ?? m.sakit_count ?? 0)
+    const izin = Number(m.izin ?? m.izin_count ?? 0)
+    const alpa = Number(m.alfa ?? m.alpa ?? m.alfa_count ?? m.alpa_count ?? 0)
+    const monthName = String(m.month || m.Month || m.name || 'Bulan')
+    return {
+      month: monthName,
+      rate,
+      hadir,
+      telat,
+      sakit,
+      izin,
+      alpa
+    }
+  })
+})
 
-const barHeight = (m: Record<string, unknown>) => {
-  const rates = trendMonths.value.map(x => Number(x.rate) || 0)
-  const max = Math.max(5, ...rates)
-  const rate = Number(m.rate) || 0
-  const h = Math.round((rate / max) * 100)
-  return `${Math.max(8, h)}%`
-}
+const averageRate = computed(() => {
+  if (!trendMonths.value.length) return 0
+  const sum = trendMonths.value.reduce((acc, curr) => acc + curr.rate, 0)
+  return Math.round(sum / trendMonths.value.length)
+})
+
+const bestMonth = computed(() => {
+  if (!trendMonths.value.length) return '-'
+  const sorted = [...trendMonths.value].sort((a, b) => b.rate - a.rate)
+  return sorted[0]?.month || '-'
+})
 
 const topAbsentStudent = computed(() => {
   const list = displayTopAbsents.value
@@ -213,156 +194,282 @@ const exportToExcel = async () => {
           Attendance Reports
         </h2>
         <p class="font-body text-body-lg text-secondary mt-1">
-          Detailed attendance logs and aggregated insights for the entire school.
+          Laporan rekap presensi dan log kehadiran siswa secara akurat dan realtime.
         </p>
       </div>
     </header>
 
-    <!-- Summary & Actions Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter-grid mb-stack-lg">
-      <!-- Monthly Trend Card -->
-      <div class="lg:col-span-1 bg-surface-white border border-surface-container-highest rounded-lg p-6 flex flex-col justify-between shadow-sm relative overflow-hidden">
-        <div class="flex justify-between items-center mb-6 z-10 relative">
-          <span class="font-label text-[11px] text-secondary font-bold uppercase tracking-widest">Monthly Attendance Trend</span>
-          <span class="material-symbols-outlined text-secondary/30 text-[20px]">timeline</span>
+    <!-- Control Bar & Filters -->
+    <div class="bg-surface-white border border-surface-container-highest rounded-lg p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+      <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <!-- Date Pickers -->
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <div class="relative flex-1 sm:w-36">
+            <input
+              v-model="fromDate"
+              type="date"
+              class="w-full appearance-none bg-surface-white border border-surface-container-highest py-2 px-3 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer text-deep-black font-medium"
+              title="Tanggal Mulai"
+            >
+          </div>
+          <span class="text-secondary text-xs font-bold">s/d</span>
+          <div class="relative flex-1 sm:w-36">
+            <input
+              v-model="toDate"
+              type="date"
+              class="w-full appearance-none bg-surface-white border border-surface-container-highest py-2 px-3 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer text-deep-black font-medium"
+              title="Tanggal Akhir"
+            >
+          </div>
         </div>
 
-        <div class="relative z-10 flex flex-col h-32 w-full">
-          <!-- Loading -->
-          <div
-            v-if="recapLoading"
-            class="flex-1 flex items-center justify-center gap-2 text-secondary text-xs"
+        <!-- Grade Filter -->
+        <div class="relative flex-1 sm:flex-none">
+          <select
+            v-model="selectedGrade"
+            class="w-full appearance-none bg-surface-white border border-surface-container-highest text-deep-black py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer font-medium"
           >
-            <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
-            Memuat data...
-          </div>
+            <option value="Semua Kelas">
+              Semua Kelas
+            </option>
+            <option value="X">
+              Kelas X
+            </option>
+            <option value="XI">
+              Kelas XI
+            </option>
+            <option value="XII">
+              Kelas XII
+            </option>
+          </select>
+          <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
+        </div>
 
-          <!-- Error -->
-          <div
-            v-else-if="recapError"
-            class="flex-1 flex items-center justify-center text-rose-600 text-xs text-center px-4 leading-snug"
+        <!-- Major Filter -->
+        <div class="relative flex-1 sm:flex-none">
+          <select
+            v-model="selectedMajor"
+            class="w-full appearance-none bg-surface-white border border-surface-container-highest text-deep-black py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer font-medium"
           >
-            {{ recapError }}
-          </div>
-
-          <!-- Empty -->
-          <div
-            v-else-if="!trendMonths.length"
-            class="flex-1 flex items-center justify-center text-secondary text-xs text-center px-4"
-          >
-            Belum ada data rekap bulanan.
-          </div>
-
-          <!-- Chart Bars -->
-          <template v-else>
-            <div class="w-full h-full flex items-end gap-2 px-2 pb-6 border-b border-l border-surface-container-highest relative">
-              <div
-                v-for="m in trendMonths"
-                :key="'bar-' + String(m.month || m.Month)"
-                class="flex-1 bg-primary/40 rounded-t-sm relative group cursor-pointer hover:bg-primary/60 transition-colors"
-                :style="{ height: barHeight(m) }"
-              >
-                <div class="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-deep-black text-white text-[10px] py-1 px-2 rounded font-bold shadow-md z-20 whitespace-nowrap">
-                  {{ String(m.month || m.Month) }} · {{ m.rate || 0 }}% Hadir
-                </div>
-              </div>
-            </div>
-            <div class="flex justify-between mt-2 font-label text-[10px] text-secondary w-full">
-              <span
-                v-for="m in trendMonths"
-                :key="'lbl-' + String(m.month || m.Month)"
-              >
-                {{ String(m.month || m.Month) }}
-              </span>
-            </div>
-          </template>
+            <option value="Semua Jurusan">
+              Semua Jurusan
+            </option>
+            <option value="DKV">
+              DKV
+            </option>
+            <option value="RPL">
+              RPL
+            </option>
+            <option value="TKJ">
+              TKJ
+            </option>
+            <option value="TOI">
+              TOI
+            </option>
+          </select>
+          <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
         </div>
       </div>
 
-      <!-- Filters & Export -->
-      <div class="lg:col-span-2 bg-surface-white border border-surface-container-highest rounded-lg p-6 flex flex-col gap-4 justify-center shadow-sm">
-        <div class="flex flex-wrap items-center gap-stack-md w-full">
-          <!-- Date Pickers -->
-          <div class="flex items-center gap-2 w-full md:w-auto">
-            <div class="relative flex-1 md:w-36">
-              <input
-                v-model="fromDate"
-                type="date"
-                class="w-full appearance-none bg-surface-white border border-surface-container-highest py-2 px-3 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer text-secondary"
-                title="From Date"
-              >
+      <!-- Export Actions -->
+      <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+        <button
+          class="flex items-center justify-center gap-2 bg-primary text-white px-5 py-2 rounded.md font-label text-xs hover:bg-primary-container transition-colors duration-200 shadow-sm font-bold active:scale-95 disabled:opacity-50"
+          :disabled="isExporting"
+          @click="exportToExcel"
+        >
+          <span
+            class="material-symbols-outlined text-[18px]"
+            :class="{ 'animate-spin': isExporting }"
+          >file_download</span>
+          {{ isExporting ? 'Mengunduh...' : 'Export Excel' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Monthly Attendance Trend Chart Section -->
+    <div class="bg-surface-white border border-surface-container-highest rounded-xl p-6 shadow-sm flex flex-col gap-5">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-surface-container-highest pb-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="font-headline text-lg text-primary font-bold">
+              Tren Presensi Bulanan (Monthly Attendance Trend)
+            </h3>
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Realtime Sync
+            </span>
+          </div>
+          <p class="text-xs text-secondary mt-0.5">
+            Grafik tingkat persentase kehadiran siswa per bulan beserta indikator detail untuk memudahkan evaluasi administrasi sekolah.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-4 text-xs font-medium">
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-primary" />
+            <span class="text-deep-black">Tingkat Hadir (%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div
+        v-if="recapLoading"
+        class="h-56 flex flex-col items-center justify-center gap-2 text-secondary text-xs"
+      >
+        <span class="material-symbols-outlined text-[24px] animate-spin text-primary">progress_activity</span>
+        <span>Memuat data grafik bulanan...</span>
+      </div>
+
+      <!-- Error State -->
+      <div
+        v-else-if="recapError"
+        class="h-56 flex items-center justify-center text-rose-600 text-xs text-center px-4"
+      >
+        <span class="material-symbols-outlined text-[18px] mr-1.5">error</span>
+        {{ recapError }}
+      </div>
+
+      <!-- Empty State -->
+      <div
+        v-else-if="!trendMonths.length"
+        class="h-56 flex flex-col items-center justify-center gap-2 text-secondary text-xs text-center px-4"
+      >
+        <span class="material-symbols-outlined text-[32px] text-secondary/40">bar_chart_off</span>
+        <span>Belum ada data rekap bulanan untuk filter yang dipilih.</span>
+      </div>
+
+      <!-- Interactive Multi-Bar Visual Chart -->
+      <div
+        v-else
+        class="flex flex-col gap-4"
+      >
+        <!-- Chart Canvas with Y-Axis lines -->
+        <div class="relative h-60 w-full pt-6 pb-2 px-2 flex items-end justify-around bg-surface-container-low/40 rounded-lg border border-surface-container-highest/60 overflow-hidden">
+          <!-- Background Grid lines -->
+          <div class="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none opacity-30">
+            <div class="border-b border-dashed border-secondary/50 flex justify-between text-[9px] font-mono text-secondary">
+              <span>100%</span>
             </div>
-            <span class="text-secondary">-</span>
-            <div class="relative flex-1 md:w-36">
-              <input
-                v-model="toDate"
-                type="date"
-                class="w-full appearance-none bg-surface-white border border-surface-container-highest py-2 px-3 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer text-secondary"
-                title="To Date"
-              >
+            <div class="border-b border-dashed border-secondary/50 flex justify-between text-[9px] font-mono text-secondary">
+              <span>75%</span>
+            </div>
+            <div class="border-b border-dashed border-secondary/50 flex justify-between text-[9px] font-mono text-secondary">
+              <span>50%</span>
+            </div>
+            <div class="border-b border-dashed border-secondary/50 flex justify-between text-[9px] font-mono text-secondary">
+              <span>25%</span>
+            </div>
+            <div class="border-b border-secondary/50 flex justify-between text-[9px] font-mono text-secondary">
+              <span>0%</span>
             </div>
           </div>
 
-          <!-- Grade Filter -->
-          <div class="relative flex-1 md:flex-none">
-            <select
-              v-model="selectedGrade"
-              class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-30 cursor-pointer"
+          <!-- Month Columns -->
+          <div
+            v-for="m in trendMonths"
+            :key="'month-col-' + m.month"
+            class="relative z-10 flex-1 max-w-24 h-full flex flex-col justify-end items-center group px-1"
+          >
+            <!-- Badge Percentage Above Bar -->
+            <div
+              class="mb-1.5 px-2 py-0.5 rounded text-[11px] font-bold shadow-xs transition-all duration-200 group-hover:scale-110"
+              :class="m.rate >= 85 ? 'bg-emerald-100 text-emerald-800' : m.rate >= 70 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'"
             >
-              <option value="Semua Kelas">
-                Semua Kelas
-              </option>
-              <option value="X">
-                Kelas X
-              </option>
-              <option value="XI">
-                Kelas XI
-              </option>
-              <option value="XII">
-                Kelas XII
-              </option>
-            </select>
-            <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
-          </div>
+              {{ m.rate }}%
+            </div>
 
-          <!-- Major Filter -->
-          <div class="relative flex-1 md:flex-none">
-            <select
-              v-model="selectedMajor"
-              class="w-full appearance-none bg-surface-white border border-surface-container-highest text-on-background py-2 pl-3 pr-8 rounded font-body text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none min-w-40 cursor-pointer"
+            <!-- Main Bar -->
+            <div
+              class="w-full rounded-t-md transition-all duration-300 relative group-hover:brightness-110 shadow-sm flex flex-col justify-end overflow-hidden"
+              :class="m.rate >= 85 ? 'bg-gradient-to-t from-primary to-primary/80' : m.rate >= 70 ? 'bg-gradient-to-t from-amber-600 to-amber-500' : 'bg-gradient-to-t from-rose-600 to-rose-500'"
+              :style="{ height: `${Math.max(10, m.rate)}%` }"
             >
-              <option value="Semua Jurusan">
-                Semua Jurusan
-              </option>
-              <option value="DKV">
-                DKV
-              </option>
-              <option value="RPL">
-                RPL
-              </option>
-              <option value="TKJ">
-                TKJ
-              </option>
-              <option value="TOI">
-                TOI
-              </option>
-            </select>
-            <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">arrow_drop_down</span>
-          </div>
+              <!-- Hover detail tooltip -->
+              <div class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-deep-black text-white text-[11px] p-2.5 rounded-lg shadow-xl z-30 pointer-events-none min-w-36 space-y-1">
+                <p class="font-bold border-b border-white/20 pb-1 text-center font-headline">
+                  Rekap {{ m.month }}
+                </p>
+                <div class="text-[10px] space-y-0.5">
+                  <div class="flex justify-between">
+                    <span>Tingkat Hadir:</span> <strong class="text-emerald-400">{{ m.rate }}%</strong>
+                  </div>
+                  <div
+                    v-if="m.hadir"
+                    class="flex justify-between"
+                  >
+                    <span>Hadir:</span> <span>{{ m.hadir }} siswa</span>
+                  </div>
+                  <div
+                    v-if="m.telat"
+                    class="flex justify-between"
+                  >
+                    <span>Telat:</span> <span class="text-amber-300">{{ m.telat }} siswa</span>
+                  </div>
+                  <div
+                    v-if="m.sakit"
+                    class="flex justify-between"
+                  >
+                    <span>Sakit:</span> <span class="text-sky-300">{{ m.sakit }} siswa</span>
+                  </div>
+                  <div
+                    v-if="m.izin"
+                    class="flex justify-between"
+                  >
+                    <span>Izin:</span> <span class="text-purple-300">{{ m.izin }} siswa</span>
+                  </div>
+                  <div
+                    v-if="m.alpa"
+                    class="flex justify-between"
+                  >
+                    <span>Alpa:</span> <span class="text-rose-400 font-bold">{{ m.alpa }} siswa</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          <!-- Export Actions -->
-          <div class="flex items-center gap-stack-sm w-full md:w-auto ml-auto">
-            <button
-              class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-primary text-white px-4 py-2 rounded-md font-label text-label-lg hover:bg-primary-container transition-colors duration-200 shadow-sm font-bold active:scale-95 disabled:opacity-50"
-              :disabled="isExporting"
-              @click="exportToExcel"
-            >
-              <span
-                class="material-symbols-outlined text-[20px]"
-                :class="{ 'animate-spin': isExporting }"
-              >table</span>
-              {{ isExporting ? 'Exporting...' : 'Export Excel (BE)' }}
-            </button>
+            <!-- Month Label Below Bar -->
+            <span class="mt-2 text-xs font-bold text-deep-black font-label tracking-tight">
+              {{ m.month }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Summary Metrics Footer -->
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+          <div class="p-3 rounded-lg bg-surface-container-low border border-surface-container-highest flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary text-[24px]">analytics</span>
+            <div>
+              <p class="text-[11px] text-secondary font-medium">
+                Rata-rata Presensi
+              </p>
+              <p class="text-sm font-bold text-deep-black">
+                {{ averageRate }}%
+              </p>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-surface-container-low border border-surface-container-highest flex items-center gap-3">
+            <span class="material-symbols-outlined text-emerald-600 text-[24px]">workspace_premium</span>
+            <div>
+              <p class="text-[11px] text-secondary font-medium">
+                Bulan Kehadiran Terbaik
+              </p>
+              <p class="text-sm font-bold text-emerald-700">
+                {{ bestMonth }}
+              </p>
+            </div>
+          </div>
+          <div class="col-span-2 md:col-span-1 p-3 rounded-lg bg-surface-container-low border border-surface-container-highest flex items-center gap-3">
+            <span class="material-symbols-outlined text-secondary text-[24px]">verified</span>
+            <div>
+              <p class="text-[11px] text-secondary font-medium">
+                Status Data Rekap
+              </p>
+              <p class="text-sm font-bold text-deep-black">
+                Tergabung {{ trendMonths.length }} Bulan
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -500,83 +607,6 @@ const exportToExcel = async () => {
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- Attendance Logs Section -->
-    <div class="mb-stack-lg">
-      <h3 class="font-headline text-[24px] text-primary tracking-tight font-bold mb-4">
-        Riwayat Log Absensi
-      </h3>
-      <div class="bg-surface-white border border-surface-container-highest rounded-lg p-6 shadow-sm overflow-x-auto">
-        <!-- Loading -->
-        <div
-          v-if="logsLoading"
-          class="flex items-center justify-center gap-2 py-8 text-secondary text-sm"
-        >
-          <span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
-          Memuat log absensi...
-        </div>
-
-        <!-- Error -->
-        <div
-          v-else-if="logsError"
-          class="flex items-center justify-center gap-2 py-8 text-rose-600 text-sm text-center"
-        >
-          <span class="material-symbols-outlined text-[18px]">error</span>
-          {{ logsError }}
-        </div>
-
-        <!-- Empty -->
-        <div
-          v-else-if="!attendanceLogsList.length"
-          class="flex items-center justify-center gap-2 py-8 text-secondary text-sm"
-        >
-          <span class="material-symbols-outlined text-[18px]">event_busy</span>
-          Tidak ada log absensi pada rentang tanggal ini.
-        </div>
-
-        <!-- Table -->
-        <table
-          v-else
-          class="w-full text-left text-sm"
-        >
-          <thead>
-            <tr class="bg-surface-container-low text-secondary uppercase text-[11px] tracking-wider border-b">
-              <th class="p-3 font-bold">
-                Nama Siswa
-              </th>
-              <th class="p-3 font-bold text-center">
-                Status
-              </th>
-              <th class="p-3 font-bold text-center">
-                Waktu
-              </th>
-              <th class="p-3 font-bold">
-                IP
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y">
-            <tr
-              v-for="log in attendanceLogsList"
-              :key="log.id"
-            >
-              <td class="p-3 font-bold text-deep-black">
-                {{ log.name }}
-              </td>
-              <td class="p-3 text-center">
-                <StatusBadge :status="String(log.status)" />
-              </td>
-              <td class="p-3 text-center text-secondary font-mono text-xs">
-                {{ log.time }}
-              </td>
-              <td class="p-3 text-secondary font-mono text-xs">
-                {{ log.ip || '-' }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
   </div>

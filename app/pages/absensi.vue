@@ -1,17 +1,18 @@
 <script setup lang="ts">
+import { normalizeStatus } from '~/composables/useAttendance'
+
 const {
   students,
   stats,
-  totalStudentsCount,
   availableClasses,
-  pagination,
   hasMoreStudents,
   fetchDashboardStats,
   fetchAttendanceStudents,
   loadMoreStudents,
-  fetchClassesList,
-  updateStudentStatus
+  fetchClassesList
 } = useAttendance()
+
+const { fetchApi } = useApi()
 
 const searchQuery = ref('')
 const selectedYear = ref('Semua')
@@ -21,6 +22,105 @@ const selectedStatus = ref('Semua')
 
 const currentPage = ref(1)
 const itemsPerPage = ref(50)
+
+interface AttendanceLogItem {
+  id: string
+  name: string
+  nisn: string
+  class: string
+  major: string
+  status: string
+  ip: string
+  time: string
+}
+
+const attendanceLogsList = ref<AttendanceLogItem[]>([])
+const logsLoading = ref(true)
+const logsError = ref('')
+const logCurrentPage = ref(1)
+const logItemsPerPage = ref(20)
+const logTotalCount = ref(0)
+const logTotalPages = computed(() => Math.ceil(logTotalCount.value / logItemsPerPage.value) || 1)
+
+const getTodayDateString = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const fetchAttendanceLogs = async () => {
+  logsLoading.value = true
+  logsError.value = ''
+
+  const today = getTodayDateString()
+  let apiStatus = selectedStatus.value !== 'Semua' ? selectedStatus.value.toLowerCase() : undefined
+  if (apiStatus === 'alpa') apiStatus = 'alfa'
+  if (apiStatus === 'belum absen') apiStatus = 'belum_absen'
+
+  const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/attendance/logs', {
+    params: {
+      page: logCurrentPage.value,
+      limit: logItemsPerPage.value,
+      start_date: today,
+      end_date: today,
+      angkatan: selectedYear.value !== 'Semua' ? selectedYear.value : undefined,
+      jurusan: selectedMajor.value !== 'Semua' ? selectedMajor.value : undefined,
+      class_group: selectedClass.value !== 'Semua' ? selectedClass.value : undefined,
+      status: apiStatus,
+      search: searchQuery.value.trim() || undefined
+    }
+  })
+
+  if (error) {
+    logsError.value = error.message || 'Gagal memuat log absensi.'
+    attendanceLogsList.value = []
+    logTotalCount.value = 0
+    logsLoading.value = false
+    return
+  }
+
+  const resObj = data?.data as Record<string, unknown> | undefined
+  const rawList = Array.isArray(resObj?.logs)
+    ? resObj.logs
+    : Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data)
+        ? data
+        : []
+
+  const serverTotal = Number(resObj?.total ?? resObj?.total_logs ?? (data as Record<string, unknown>)?.total ?? rawList.length)
+  logTotalCount.value = Math.max(serverTotal, rawList.length)
+
+  attendanceLogsList.value = (rawList as Record<string, unknown>[]).map((log, idx) => {
+    const user = (log.user || log.siswa || {}) as Record<string, unknown>
+    const rawTime = String(log.clock_in_time || log.created_at || log.time || '-')
+    let formattedTime = rawTime
+    if (rawTime.includes('T') || rawTime.includes(' ')) {
+      const timePart = rawTime.split(/[T ]/)[1]
+      formattedTime = timePart ? timePart.substring(0, 8) : rawTime
+    }
+
+    const clsName = String(user.class_group || user.class || log.class_group || log.class || '-')
+    const sName = String(user.full_name || user.name || log.full_name || log.name || 'Siswa')
+    const sNisn = String(user.nisn || user.username || log.nisn || '-')
+    const sMajor = String(user.jurusan || user.major || log.jurusan || '-')
+
+    return {
+      id: String(log.id ?? idx),
+      name: sName,
+      nisn: sNisn,
+      class: clsName,
+      major: sMajor,
+      status: normalizeStatus(String(log.status || log.attendance_status || 'Belum Absen')),
+      ip: String(log.captured_ip || log.CapturedIp || log.ip || '-'),
+      time: formattedTime
+    }
+  })
+
+  logsLoading.value = false
+}
 
 const majorIcons: Record<string, string> = {
   RPL: 'code',
@@ -75,23 +175,26 @@ const applyFilters = () => {
   }
   fetchAttendanceStudents(filters)
   fetchDashboardStats(filters)
+  fetchAttendanceLogs()
 }
 
 // Menyesuaikan daftar kelas berdasarkan jurusan dan angkatan yang dipilih
 const filteredClasses = computed(() => {
-  return availableClasses.value.filter((c) => {
-    const clsName = typeof c === 'string' ? c.toUpperCase() : String(c).toUpperCase();
-    
+  return availableClasses.value.filter((c: unknown) => {
+    const item = c as Record<string, unknown> | string
+    const rawName = typeof item === 'string' ? item : String(item?.name || item?.class_name || item || '')
+    const clsName = rawName.toUpperCase()
+
     // Filter Jurusan
-    const matchMajor = selectedMajor.value === 'Semua' || clsName.includes(selectedMajor.value.toUpperCase());
-    
+    const matchMajor = selectedMajor.value === 'Semua' || clsName.includes(selectedMajor.value.toUpperCase())
+
     // Filter Angkatan
-    const matchYear = selectedYear.value === 'Semua' || 
-                      clsName.startsWith(selectedYear.value + ' ') || 
-                      clsName.startsWith(selectedYear.value + '-');
-                      
-    return matchMajor && matchYear;
-  });
+    const matchYear = selectedYear.value === 'Semua'
+      || clsName.startsWith(selectedYear.value + ' ')
+      || clsName.startsWith(selectedYear.value + '-')
+
+    return matchMajor && matchYear
+  })
 })
 
 // Reset kelas ke 'Semua' jika jurusan atau angkatan berubah
@@ -103,16 +206,10 @@ let filterTimer: ReturnType<typeof setTimeout> | null = null
 
 watch([searchQuery, selectedYear, selectedMajor, selectedClass, selectedStatus, itemsPerPage], () => {
   currentPage.value = 1
+  logCurrentPage.value = 1
   if (filterTimer) clearTimeout(filterTimer)
   filterTimer = setTimeout(applyFilters, 300)
 })
-
-const paginatedStudents = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value
-  return students.value.slice(start, start + itemsPerPage.value)
-})
-
-const totalPages = computed(() => Math.ceil(students.value.length / itemsPerPage.value) || 1)
 
 const resetFilters = () => {
   searchQuery.value = ''
@@ -121,6 +218,7 @@ const resetFilters = () => {
   selectedClass.value = 'Semua'
   selectedStatus.value = 'Semua'
   currentPage.value = 1
+  logCurrentPage.value = 1
   // applyFilters will be triggered by watch
 }
 
@@ -134,17 +232,6 @@ const departmentStats = computed(() => {
     return { major: m, percentage }
   })
 })
-
-const { showError, showSuccess } = useAppToast()
-
-const handleStatusChange = async (studentId: string, status: string, studentName: string) => {
-  const res = await updateStudentStatus(studentId, status)
-  if (res.success) {
-    showSuccess(`Status ${studentName} berhasil diubah menjadi ${status}`)
-  } else {
-    showError(res.message || `Gagal mengubah status presensi ${studentName}`)
-  }
-}
 </script>
 
 <template>
@@ -221,8 +308,43 @@ const handleStatusChange = async (studentId: string, status: string, studentName
       </div>
     </div>
 
-    <!-- Main Data Table Section -->
-    <div class="bg-surface-white rounded-lg border border-surface-container-highest shadow-sm overflow-hidden">
+    <!-- Riwayat Log Absensi Hari Ini Section -->
+    <div class="bg-surface-white rounded-lg border border-surface-container-highest shadow-sm overflow-hidden mt-6">
+      <div class="p-5 border-b border-surface-container-highest bg-surface-container-lowest flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-[22px]">history</span>
+            <h3 class="font-headline text-lg font-bold text-on-surface">
+              Riwayat Log Absensi Hari Ini
+            </h3>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Realtime Sync
+            </span>
+          </div>
+          <p class="text-xs text-secondary mt-0.5 font-body">
+            Daftar catatan aktivitas / log masuk & keluar presensi siswa pada {{ formattedDate }}.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <span class="text-xs text-secondary font-medium">Total Log:</span>
+          <span class="px-2.5 py-1 rounded bg-primary/10 text-primary font-bold text-xs font-mono">
+            {{ logTotalCount }} Log
+          </span>
+          <button
+            class="p-1.5 rounded hover:bg-surface-container-low text-secondary hover:text-primary transition-colors ml-1"
+            title="Refresh Log Absensi"
+            @click="fetchAttendanceLogs"
+          >
+            <span
+              class="material-symbols-outlined text-[18px]"
+              :class="{ 'animate-spin': logsLoading }"
+            >refresh</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Filters Bar -->
       <div class="p-4 border-b border-surface-container-highest bg-surface-container-lowest flex flex-wrap gap-4 items-end">
         <div class="flex-1 min-w-50">
@@ -326,98 +448,132 @@ const handleStatusChange = async (studentId: string, status: string, studentName
         </button>
       </div>
 
-      <!-- Data Table -->
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
+      <!-- Loading State -->
+      <div
+        v-if="logsLoading"
+        class="flex flex-col items-center justify-center gap-2 py-12 text-secondary text-xs"
+      >
+        <span class="material-symbols-outlined text-[24px] animate-spin text-primary">progress_activity</span>
+        <span>Memuat riwayat log absensi hari ini...</span>
+      </div>
+
+      <!-- Error State -->
+      <div
+        v-else-if="logsError"
+        class="flex items-center justify-center gap-2 py-10 text-rose-600 text-xs text-center px-4"
+      >
+        <span class="material-symbols-outlined text-[18px]">error</span>
+        <span>{{ logsError }}</span>
+      </div>
+
+      <!-- Empty State -->
+      <div
+        v-else-if="!attendanceLogsList.length"
+        class="flex flex-col items-center justify-center gap-2 py-12 text-secondary text-xs text-center px-4"
+      >
+        <span class="material-symbols-outlined text-[36px] text-secondary/40">event_busy</span>
+        <span class="font-medium text-sm text-on-surface">Belum Ada Log Absensi Hari Ini</span>
+        <span class="text-secondary text-xs max-w-md">
+          Belum terdapat catatan masuk/keluar presensi siswa untuk filter yang dipilih pada hari ini.
+        </span>
+      </div>
+
+      <!-- Table State -->
+      <div
+        v-else
+        class="overflow-x-auto"
+      >
+        <table class="w-full text-left border-collapse text-sm">
           <thead>
             <tr class="bg-background-cream text-secondary font-label text-label-sm uppercase tracking-wider border-b border-surface-container-highest">
-              <th class="p-4 font-semibold w-16 text-center">
+              <th class="p-4 font-semibold w-12 text-center">
                 No
               </th>
               <th class="p-4 font-semibold">
                 Nama Siswa
               </th>
               <th class="p-4 font-semibold">
-                NISN
-              </th>
-              <th class="p-4 font-semibold">
-                Kelas
+                Kelas & Jurusan
               </th>
               <th class="p-4 font-semibold text-center">
-                Waktu
+                Waktu Presensi
               </th>
               <th class="p-4 font-semibold text-center">
                 Status Presensi
               </th>
-              <th class="p-4 font-semibold text-right">
-                Aksi
+              <th class="p-4 font-semibold">
+                IP Network
               </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-surface-container-highest">
             <tr
-              v-for="(student, index) in paginatedStudents"
-              :key="student.id"
+              v-for="(log, idx) in attendanceLogsList"
+              :key="log.id"
               class="hover:bg-surface-container-low/50 transition-colors"
             >
-              <td class="p-4 text-center text-secondary font-body">
-                {{ (currentPage - 1) * itemsPerPage + index + 1 }}
+              <td class="p-4 text-center text-secondary font-body text-xs">
+                {{ (logCurrentPage - 1) * logItemsPerPage + idx + 1 }}
               </td>
-              <td class="p-4 font-label text-label-lg text-on-surface font-bold">
-                {{ student.name }}
+              <td class="p-4">
+                <p class="font-label text-label-md text-on-surface font-bold">
+                  {{ log.name }}
+                </p>
+                <p class="text-xs text-secondary font-mono">
+                  NISN: {{ log.nisn }}
+                </p>
               </td>
-              <td class="p-4 text-secondary font-mono text-sm">
-                {{ student.nisn }}
-              </td>
-              <td class="p-4 text-on-surface font-body">
-                {{ student.class }}
-              </td>
-              <td class="p-4 text-center text-secondary font-body">
-                {{ student.time || '-' }}
+              <td class="p-4 text-on-surface font-body text-xs">
+                <span class="font-medium">{{ log.class }}</span>
+                <span
+                  v-if="log.major && log.major !== '-'"
+                  class="text-secondary ml-1"
+                >({{ log.major }})</span>
               </td>
               <td class="p-4 text-center">
-                <StatusBadge :status="student.status" />
+                <span class="inline-flex items-center gap-1 font-mono text-xs font-semibold text-deep-black bg-surface-container-low px-2.5 py-1 rounded border border-surface-container-highest">
+                  <span class="material-symbols-outlined text-[14px] text-primary">schedule</span>
+                  {{ log.time }}
+                </span>
               </td>
-              <td class="p-4 text-right">
-                <div class="inline-flex gap-1">
-                  <QuickActionButtons
-                    :current-status="student.status"
-                    @update-status="(status) => handleStatusChange(student.id, status, student.name)"
-                  />
+              <td class="p-4 text-center">
+                <StatusBadge :status="log.status" />
+              </td>
+              <td class="p-4 text-secondary font-mono text-xs">
+                <div class="flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[14px] text-secondary/60">lan</span>
+                  <span>{{ log.ip }}</span>
                 </div>
-              </td>
-            </tr>
-            <tr v-if="!paginatedStudents.length">
-              <td
-                colspan="7"
-                class="p-8 text-center text-secondary"
-              >
-                Tidak ada data siswa ditemukan.
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary">
-        <div class="flex flex-wrap items-center gap-4">
+      <!-- Log Pagination Footer -->
+      <div
+        v-if="attendanceLogsList.length"
+        class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary"
+      >
+        <div class="flex items-center gap-4">
           <span>
-            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, students.length) }} dari {{ students.length }} siswa
+            Menampilkan {{ (logCurrentPage - 1) * logItemsPerPage + 1 }}-{{ Math.min(logCurrentPage * logItemsPerPage, logTotalCount) }} dari {{ logTotalCount }} log
           </span>
           <div class="flex items-center gap-2">
             <span class="text-xs font-label">Tampilkan:</span>
             <select
-              v-model="itemsPerPage"
+              v-model="logItemsPerPage"
               class="px-2 py-1 border border-surface-container-highest rounded text-xs text-deep-black bg-surface-white focus:outline-none focus:border-primary font-bold"
+              @change="logCurrentPage = 1; fetchAttendanceLogs()"
             >
               <option :value="10">
                 10
               </option>
-              <option :value="25">
-                25
+              <option :value="20">
+                20 (Default)
               </option>
               <option :value="50">
-                50 (Default)
+                50
               </option>
             </select>
           </div>
@@ -425,32 +581,20 @@ const handleStatusChange = async (studentId: string, status: string, studentName
         <div class="flex gap-1 items-center">
           <button
             class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-50"
-            :disabled="currentPage === 1"
-            @click="currentPage--"
+            :disabled="logCurrentPage === 1"
+            @click="logCurrentPage--; fetchAttendanceLogs()"
           >
             <span class="material-symbols-outlined text-[18px]">chevron_left</span>
           </button>
-          <span class="px-3 font-bold text-on-surface">{{ currentPage }} / {{ totalPages }}</span>
+          <span class="px-3 font-bold text-on-surface">{{ logCurrentPage }} / {{ logTotalPages }}</span>
           <button
             class="w-8 h-8 rounded flex items-center justify-center border border-surface-container-highest text-secondary hover:border-primary hover:text-primary disabled:opacity-50"
-            :disabled="currentPage >= totalPages"
-            @click="currentPage++"
+            :disabled="logCurrentPage >= logTotalPages"
+            @click="logCurrentPage++; fetchAttendanceLogs()"
           >
             <span class="material-symbols-outlined text-[18px]">chevron_right</span>
           </button>
         </div>
-      </div>
-
-      <!-- Lazy Load Sentinel -->
-      <div
-        ref="loadMoreSentinel"
-        class="flex items-center justify-center gap-2 py-3 text-xs text-secondary"
-      >
-        <template v-if="hasMoreStudents">
-          <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
-          <span>Memuat data siswa...</span>
-        </template>
-        <span v-else-if="students.length">Semua data siswa telah dimuat</span>
       </div>
     </div>
   </div>

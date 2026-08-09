@@ -56,8 +56,9 @@ const fetchWithFilters = () => {
 
 // Menyesuaikan daftar kelas berdasarkan angkatan yang dipilih
 const filteredClasses = computed(() => {
-  return availableClasses.value.filter((c) => {
-    const clsName = typeof c === 'string' ? c.toUpperCase() : String(c).toUpperCase()
+  return availableClasses.value.filter((c: any) => {
+    const rawName = typeof c === 'string' ? c : String(c?.name || c?.class_name || c || '')
+    const clsName = rawName.toUpperCase()
     if (!selectedGrade.value) return true
     return clsName.startsWith(selectedGrade.value + ' ') || clsName.startsWith(selectedGrade.value + '-')
   })
@@ -68,17 +69,23 @@ watch(selectedGrade, () => {
   selectedClass.value = ''
 })
 
-// Debounce: refetch dari API saat page / filter / search / limit berubah (1 request saja)
+// Debounce: saat filter berubah, reset ke halaman 1 lalu fetch
 let filterTimer: ReturnType<typeof setTimeout> | null = null
-watch([searchQuery, selectedGrade, selectedClass, selectedStatus, currentPage, itemsPerPage], () => {
+watch([searchQuery, selectedGrade, selectedClass, selectedStatus], () => {
   if (filterTimer) clearTimeout(filterTimer)
   filterTimer = setTimeout(() => {
     if (currentPage.value !== 1) {
+      // Mengubah currentPage akan memicu watcher di bawah yang akan fetch
       currentPage.value = 1
-      return
+    } else {
+      fetchWithFilters()
     }
-    fetchWithFilters()
   }, 300)
+})
+
+// Saat page atau jumlah item per halaman berubah, langsung fetch
+watch([currentPage, itemsPerPage], () => {
+  fetchWithFilters()
 })
 
 // Kalau total halaman mengecil (setelah delete/filter), mundur ke halaman yang valid
