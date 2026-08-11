@@ -17,8 +17,10 @@ const { user: authUser } = useAuth()
 const adminName = computed(() => authUser.value?.full_name || authUser.value?.name || authUser.value?.username || 'Admin')
 
 const searchQuery = ref('')
-const selectedGrade = ref('Semua Angkatan')
-const selectedClass = ref('Semua Kelas')
+const selectedYear = ref('Semua')
+const selectedMajor = ref('Semua')
+const selectedClass = ref('Semua')
+const selectedStatus = ref('Semua')
 
 const currentPage = ref(1)
 const itemsPerPage = ref(50)
@@ -28,13 +30,49 @@ const formattedDate = computed(() => {
   return new Date().toLocaleDateString('id-ID', options)
 })
 
-// Fetch data dari API
-const fetchTableData = () => {
-  const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
-  fetchAttendanceStudents({
-    angkatan: angkatanVal,
-    class_group: selectedClass.value !== 'Semua Kelas' ? selectedClass.value : undefined
+// Menyesuaikan daftar kelas berdasarkan jurusan dan angkatan yang dipilih
+const filteredClasses = computed(() => {
+  return availableClasses.value.filter((c: unknown) => {
+    const item = c as Record<string, unknown> | string
+    const rawName = typeof item === 'string' ? item : String(item?.name || item?.class_name || item || '')
+    const clsName = rawName.toUpperCase()
+
+    // Filter Jurusan
+    const matchMajor = selectedMajor.value === 'Semua' || clsName.includes(selectedMajor.value.toUpperCase())
+
+    // Filter Angkatan
+    const matchYear = selectedYear.value === 'Semua'
+      || clsName.startsWith(selectedYear.value + ' ')
+      || clsName.startsWith(selectedYear.value + '-')
+
+    return matchMajor && matchYear
   })
+})
+
+// Apply all filters ke API
+const applyFilters = () => {
+  const filters = {
+    angkatan: selectedYear.value !== 'Semua' ? selectedYear.value : undefined,
+    jurusan: selectedMajor.value !== 'Semua' ? selectedMajor.value : undefined,
+    class_group: selectedClass.value !== 'Semua' ? selectedClass.value : undefined,
+    status: selectedStatus.value !== 'Semua' ? selectedStatus.value : undefined,
+    search: searchQuery.value.trim() || undefined,
+    page: currentPage.value,
+    limit: itemsPerPage.value
+  }
+  fetchAttendanceStudents(filters)
+  fetchDashboardStats(filters)
+  fetchDashboardTrend({ angkatan: filters.angkatan })
+}
+
+const resetFilters = () => {
+  searchQuery.value = ''
+  selectedYear.value = 'Semua'
+  selectedMajor.value = 'Semua'
+  selectedClass.value = 'Semua'
+  selectedStatus.value = 'Semua'
+  currentPage.value = 1
+  // applyFilters will be triggered by watch
 }
 
 const loadMoreSentinel = ref<HTMLElement | null>(null)
@@ -54,10 +92,8 @@ const setupLoadMoreObserver = () => {
 
 onMounted(async () => {
   await Promise.all([
-    fetchDashboardStats(),
-    fetchDashboardTrend(),
     fetchClassesList(),
-    fetchTableData()
+    applyFilters()
   ])
   await nextTick()
   setupLoadMoreObserver()
@@ -67,26 +103,32 @@ onUnmounted(() => {
   loadMoreObserver?.disconnect()
 })
 
+// Reset kelas ke 'Semua' jika jurusan atau angkatan berubah
+watch([selectedMajor, selectedYear], () => {
+  selectedClass.value = 'Semua'
+})
+
 let filterTimer: ReturnType<typeof setTimeout> | null = null
-watch([selectedGrade, selectedClass], () => {
+
+watch([searchQuery, selectedYear, selectedMajor, selectedClass, selectedStatus, itemsPerPage], () => {
+  currentPage.value = 1
   if (filterTimer) clearTimeout(filterTimer)
-  filterTimer = setTimeout(() => {
-    const angkatanVal = selectedGrade.value !== 'Semua Angkatan' ? selectedGrade.value : undefined
-    fetchDashboardStats({ angkatan: angkatanVal })
-    fetchDashboardTrend({ angkatan: angkatanVal })
-    fetchTableData()
-  }, 300)
+  filterTimer = setTimeout(applyFilters, 300)
 })
 
 const normalizeClassStr = (c: string) => String(c || '').toLowerCase().replace(/[-_ ]/g, '')
 
 const baseFilteredStudents = computed(() => {
   return students.value.filter((s) => {
-    const matchesGrade = selectedGrade.value === 'Semua Angkatan' || s.grade === selectedGrade.value
-    const matchesClass = selectedClass.value === 'Semua Kelas'
+    const matchesGrade = selectedYear.value === 'Semua' || s.grade === selectedYear.value
+    const matchesMajor = selectedMajor.value === 'Semua' || s.major === selectedMajor.value
+    const matchesClass = selectedClass.value === 'Semua'
       || s.class === selectedClass.value
       || normalizeClassStr(s.class) === normalizeClassStr(selectedClass.value)
-    return matchesGrade && matchesClass
+    const matchesStatus = selectedStatus.value === 'Semua'
+      || s.status === selectedStatus.value
+      || (selectedStatus.value === 'Belum Absen' && (s.status === 'Belum Absen' || s.status?.toLowerCase() === 'belum_absen'))
+    return matchesGrade && matchesMajor && matchesClass && matchesStatus
   })
 })
 
@@ -104,11 +146,6 @@ const paginatedStudents = computed(() => {
 
 const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage.value) || 1)
 
-// Reset ke halaman 1 saat kriteria pencarian / limit berubah
-watch([searchQuery, selectedGrade, selectedClass, itemsPerPage], () => {
-  currentPage.value = 1
-})
-
 // Kalau total halaman mengecil (setelah filter/hapus), mundur ke halaman valid
 watch(totalPages, (tp) => {
   if (currentPage.value > tp) {
@@ -116,8 +153,14 @@ watch(totalPages, (tp) => {
   }
 })
 
+const isFiltered = computed(() => {
+  return selectedYear.value !== 'Semua'
+    || selectedMajor.value !== 'Semua'
+    || selectedClass.value !== 'Semua'
+    || selectedStatus.value !== 'Semua'
+})
+
 const displayStats = computed(() => {
-  const isClassOrGradeFiltered = selectedGrade.value !== 'Semua Angkatan' || selectedClass.value !== 'Semua Kelas'
   const list = baseFilteredStudents.value
   const totalAbsen = list.filter(s => s.status?.toLowerCase() !== 'belum absen' && s.status?.toLowerCase() !== 'belum_absen').length
   const hadirTepat = list.filter(s => s.status?.toLowerCase() === 'hadir').length
@@ -129,14 +172,14 @@ const displayStats = computed(() => {
   const serverTotal = totalStudentsCount.value || stats.value.totalStudents
 
   return {
-    totalStudents: isClassOrGradeFiltered ? list.length : (serverTotal || list.length),
-    totalAbsenHariIni: isClassOrGradeFiltered ? totalAbsen : Math.max(stats.value.totalAbsenHariIni, totalAbsen),
-    hadirCount: isClassOrGradeFiltered ? (hadirTepat + telat) : Math.max(stats.value.hadirCount, hadirTepat + telat),
-    hadirTepatCount: isClassOrGradeFiltered ? hadirTepat : Math.max(stats.value.hadirTepatCount, hadirTepat),
-    telatCount: isClassOrGradeFiltered ? telat : Math.max(stats.value.telatCount, telat),
-    sakitCount: isClassOrGradeFiltered ? sakit : Math.max(stats.value.sakitCount, sakit),
-    alpaCount: isClassOrGradeFiltered ? alpa : Math.max(stats.value.alpaCount, alpa),
-    izinCount: isClassOrGradeFiltered ? izin : Math.max(stats.value.izinCount, izin)
+    totalStudents: isFiltered.value ? list.length : (serverTotal || list.length),
+    totalAbsenHariIni: isFiltered.value ? totalAbsen : Math.max(stats.value.totalAbsenHariIni, totalAbsen),
+    hadirCount: isFiltered.value ? (hadirTepat + telat) : Math.max(stats.value.hadirCount, hadirTepat + telat),
+    hadirTepatCount: isFiltered.value ? hadirTepat : Math.max(stats.value.hadirTepatCount, hadirTepat),
+    telatCount: isFiltered.value ? telat : Math.max(stats.value.telatCount, telat),
+    sakitCount: isFiltered.value ? sakit : Math.max(stats.value.sakitCount, sakit),
+    alpaCount: isFiltered.value ? alpa : Math.max(stats.value.alpaCount, alpa),
+    izinCount: isFiltered.value ? izin : Math.max(stats.value.izinCount, izin)
   }
 })
 
@@ -150,6 +193,16 @@ const handleStatusChange = async (studentId: string, status: string, studentName
     showError(res.message || `Gagal mengubah status presensi ${studentName}`)
   }
 }
+
+// Menghitung jumlah filter aktif
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (selectedYear.value !== 'Semua') count++
+  if (selectedMajor.value !== 'Semua') count++
+  if (selectedClass.value !== 'Semua') count++
+  if (selectedStatus.value !== 'Semua') count++
+  return count
+})
 </script>
 
 <template>
@@ -206,62 +259,151 @@ const handleStatusChange = async (studentId: string, status: string, studentName
 
     <!-- Main Table Area -->
     <div class="bg-surface-white border border-surface-container-highest rounded-lg shadow-sm flex flex-col overflow-hidden">
-      <!-- Table Header & Controls -->
-      <div class="p-4 border-b border-surface-container-highest flex flex-col lg:flex-row justify-between items-center gap-4">
-        <h3 class="font-headline text-title-lg text-deep-black font-bold">
-          Presensi Harian Siswa (Hari Ini)
-        </h3>
-        <div class="flex items-center gap-3 w-full lg:w-auto">
-          <!-- Search -->
-          <div class="relative w-full lg:w-64">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm">search</span>
+      <!-- Table Header -->
+      <div class="p-5 border-b border-surface-container-highest bg-surface-container-lowest flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[22px]">table_chart</span>
+          <h3 class="font-headline text-title-lg text-deep-black font-bold">
+            Presensi Harian Siswa (Hari Ini)
+          </h3>
+          <span
+            v-if="isFiltered"
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary border border-primary/20"
+          >
+            <span class="material-symbols-outlined text-[14px]">filter_alt</span>
+            {{ activeFilterCount }} Filter Aktif
+          </span>
+        </div>
+      </div>
+
+      <!-- Filters Bar -->
+      <div class="p-4 border-b border-surface-container-highest bg-surface-container-lowest flex flex-wrap gap-4 items-end">
+        <!-- Search -->
+        <div class="flex-1 min-w-50">
+          <label class="block font-label text-label-sm text-secondary mb-1">Pencarian</label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[18px]">search</span>
             <input
               v-model="searchQuery"
               type="text"
-              class="w-full pl-9 pr-4 py-2 border border-surface-container-highest rounded text-body-md text-deep-black placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-              placeholder="Cari NISN atau Nama..."
+              class="w-full h-10 pl-9 pr-3 rounded border border-surface-container-highest focus:border-primary focus:ring-1 focus:ring-primary text-body-md text-on-surface"
+              placeholder="Cari nama atau NISN..."
             >
-          </div>
-          <!-- Dropdowns -->
-          <div class="relative">
-            <select
-              v-model="selectedGrade"
-              class="appearance-none pl-4 pr-10 py-2 border border-surface-container-highest rounded text-body-md text-deep-black bg-surface-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            >
-              <option value="Semua Angkatan">
-                Semua Angkatan
-              </option>
-              <option value="X">
-                Kelas X
-              </option>
-              <option value="XI">
-                Kelas XI
-              </option>
-              <option value="XII">
-                Kelas XII
-              </option>
-            </select>
-            <span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm pointer-events-none">expand_more</span>
-          </div>
-          <div class="relative">
-            <select
-              v-model="selectedClass"
-              class="appearance-none pl-4 pr-10 py-2 border border-surface-container-highest rounded text-body-md text-deep-black bg-surface-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            >
-              <option value="Semua Kelas">
-                Semua Kelas
-              </option>
-              <option
-                v-for="cls in availableClasses"
-                :key="cls.id || cls.name || cls"
-                :value="cls.name || cls.class_name || cls"
-              >
-                {{ cls.name || cls.class_name || cls }}
-              </option>
-            </select>
-            <span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm pointer-events-none">expand_more</span>
           </div>
         </div>
+
+        <!-- Angkatan -->
+        <div class="w-full sm:w-auto">
+          <label class="block font-label text-label-sm text-secondary mb-1">Angkatan</label>
+          <select
+            v-model="selectedYear"
+            class="w-full sm:w-32 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
+          >
+            <option value="Semua">
+              Semua
+            </option>
+            <option value="X">
+              Kelas X
+            </option>
+            <option value="XI">
+              Kelas XI
+            </option>
+            <option value="XII">
+              Kelas XII
+            </option>
+          </select>
+        </div>
+
+        <!-- Jurusan -->
+        <div class="w-full sm:w-auto">
+          <label class="block font-label text-label-sm text-secondary mb-1">Jurusan</label>
+          <select
+            v-model="selectedMajor"
+            class="w-full sm:w-32 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
+          >
+            <option value="Semua">
+              Semua
+            </option>
+            <option value="DKV">
+              DKV
+            </option>
+            <option value="RPL">
+              RPL
+            </option>
+            <option value="TKJ">
+              TKJ
+            </option>
+            <option value="LPB">
+              LPB
+            </option>
+            <option value="TOI">
+              TOI
+            </option>
+          </select>
+        </div>
+
+        <!-- Kelas -->
+        <div class="w-full sm:w-auto">
+          <label class="block font-label text-label-sm text-secondary mb-1">Kelas</label>
+          <select
+            v-model="selectedClass"
+            class="w-full sm:w-36 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
+          >
+            <option value="Semua">
+              Semua
+            </option>
+            <option
+              v-for="c in filteredClasses"
+              :key="c"
+              :value="c"
+            >
+              {{ c }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Status -->
+        <div class="w-full sm:w-auto">
+          <label class="block font-label text-label-sm text-secondary mb-1">Status</label>
+          <select
+            v-model="selectedStatus"
+            class="w-full sm:w-36 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
+          >
+            <option value="Semua">
+              Semua
+            </option>
+            <option value="Belum Absen">
+              Belum Absen
+            </option>
+            <option value="Hadir">
+              Hadir
+            </option>
+            <option value="Telat">
+              Telat
+            </option>
+            <option value="Izin">
+              Izin
+            </option>
+            <option value="Sakit">
+              Sakit
+            </option>
+            <option value="PKL">
+              PKL
+            </option>
+            <option value="Alpa">
+              Alpa
+            </option>
+          </select>
+        </div>
+
+        <!-- Reset Button -->
+        <button
+          class="h-10 px-4 rounded text-secondary hover:text-primary hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2 border border-transparent font-label text-sm"
+          @click="resetFilters"
+        >
+          <span class="material-symbols-outlined text-[18px]">refresh</span>
+          Reset
+        </button>
       </div>
 
       <!-- Data Table -->
@@ -339,7 +481,19 @@ const handleStatusChange = async (studentId: string, status: string, studentName
                 colspan="7"
                 class="p-8 text-center text-secondary"
               >
-                Tidak ada data siswa yang cocok dengan kriteria pencarian.
+                <div class="flex flex-col items-center gap-2">
+                  <span class="material-symbols-outlined text-[36px] text-secondary/40">search_off</span>
+                  <span class="font-medium text-sm text-on-surface">Tidak ada data siswa</span>
+                  <span class="text-xs">Tidak ada data siswa yang cocok dengan filter yang dipilih.</span>
+                  <button
+                    v-if="isFiltered"
+                    class="mt-2 px-3 py-1.5 text-xs font-label font-bold text-primary hover:bg-primary/10 rounded transition-colors flex items-center gap-1"
+                    @click="resetFilters"
+                  >
+                    <span class="material-symbols-outlined text-[16px]">refresh</span>
+                    Reset Filter
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>

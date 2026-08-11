@@ -15,6 +15,7 @@ const {
 
 const searchQuery = ref('')
 const selectedGrade = ref('')
+const selectedMajor = ref('')
 const selectedClass = ref('')
 const selectedStatus = ref('')
 
@@ -49,29 +50,38 @@ const fetchWithFilters = () => {
     limit: itemsPerPage.value,
     class_group: selectedClass.value || undefined,
     angkatan: selectedGrade.value || undefined,
+    jurusan: selectedMajor.value || undefined,
     search: searchQuery.value || undefined,
     status: selectedStatus.value || undefined
   })
 }
 
-// Menyesuaikan daftar kelas berdasarkan angkatan yang dipilih
+// Menyesuaikan daftar kelas berdasarkan angkatan dan jurusan yang dipilih
 const filteredClasses = computed(() => {
   return availableClasses.value.filter((c: any) => {
     const rawName = typeof c === 'string' ? c : String(c?.name || c?.class_name || c || '')
     const clsName = rawName.toUpperCase()
-    if (!selectedGrade.value) return true
-    return clsName.startsWith(selectedGrade.value + ' ') || clsName.startsWith(selectedGrade.value + '-')
+
+    // Filter Angkatan
+    const matchGrade = !selectedGrade.value
+      || clsName.startsWith(selectedGrade.value + ' ')
+      || clsName.startsWith(selectedGrade.value + '-')
+
+    // Filter Jurusan
+    const matchMajor = !selectedMajor.value || clsName.includes(selectedMajor.value.toUpperCase())
+
+    return matchGrade && matchMajor
   })
 })
 
-// Reset kelas ke 'Semua' jika angkatan berubah
-watch(selectedGrade, () => {
+// Reset kelas ke 'Semua' jika angkatan atau jurusan berubah
+watch([selectedGrade, selectedMajor], () => {
   selectedClass.value = ''
 })
 
 // Debounce: saat filter berubah, reset ke halaman 1 lalu fetch
 let filterTimer: ReturnType<typeof setTimeout> | null = null
-watch([searchQuery, selectedGrade, selectedClass, selectedStatus], () => {
+watch([searchQuery, selectedGrade, selectedMajor, selectedClass, selectedStatus], () => {
   if (filterTimer) clearTimeout(filterTimer)
   filterTimer = setTimeout(() => {
     if (currentPage.value !== 1) {
@@ -98,6 +108,7 @@ watch(() => pagination.value.totalPages, (tp) => {
 const resetAllFilters = () => {
   searchQuery.value = ''
   selectedGrade.value = ''
+  selectedMajor.value = ''
   selectedClass.value = ''
   selectedStatus.value = ''
 }
@@ -277,6 +288,34 @@ const handleResetPasswordSubmit = async () => {
             <span class="absolute right-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm pointer-events-none">expand_more</span>
           </div>
 
+          <!-- Jurusan Filter -->
+          <div class="relative flex-1 min-w-0 sm:flex-none sm:w-36">
+            <select
+              v-model="selectedMajor"
+              class="w-full appearance-none pl-3 pr-8 py-2 border border-surface-container-highest rounded text-body-md text-deep-black bg-surface-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            >
+              <option value="">
+                Semua Jurusan
+              </option>
+              <option value="DKV">
+                DKV
+              </option>
+              <option value="RPL">
+                RPL
+              </option>
+              <option value="TKJ">
+                TKJ
+              </option>
+              <option value="LPB">
+                LPB
+              </option>
+              <option value="TOI">
+                TOI
+              </option>
+            </select>
+            <span class="absolute right-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-sm pointer-events-none">expand_more</span>
+          </div>
+
           <!-- Class Filter -->
           <div class="relative flex-1 min-w-0 sm:flex-none sm:w-40">
             <select
@@ -321,7 +360,7 @@ const handleResetPasswordSubmit = async () => {
 
           <!-- Reset Filter Button -->
           <button
-            v-if="searchQuery || selectedGrade || selectedClass || selectedStatus"
+            v-if="searchQuery || selectedGrade || selectedMajor || selectedClass || selectedStatus"
             class="shrink-0 ml-1 h-9 px-3 rounded text-secondary hover:text-primary hover:bg-surface-container-low transition-colors flex items-center gap-1.5 border border-surface-container-highest font-label text-xs font-bold whitespace-nowrap"
             title="Reset semua filter"
             @click="resetAllFilters"

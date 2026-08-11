@@ -10,6 +10,38 @@ const developers = [
 const closeModal = () => {
   isOpen.value = false
 }
+
+const konamiCode = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a']
+let inputSequence: string[] = []
+
+const handleKeydown = (event: KeyboardEvent) => {
+  // Ignore keypresses when typing in input, textarea, select, or contenteditable
+  const target = event.target as HTMLElement | null
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable || target.tagName === 'SELECT')) {
+    return
+  }
+
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
+  inputSequence.push(key)
+
+  if (inputSequence.length > konamiCode.length) {
+    inputSequence.shift()
+  }
+
+  const isMatch = konamiCode.length === inputSequence.length && konamiCode.every((k, idx) => k.toLowerCase() === inputSequence[idx]?.toLowerCase())
+  if (isMatch) {
+    isOpen.value = true
+    inputSequence = []
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
