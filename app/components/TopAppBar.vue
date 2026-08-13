@@ -103,7 +103,7 @@ const markAllAsRead = async () => {
         >
           <div
             v-if="showNotificationToast"
-            class="absolute right-0 mt-2 w-80 bg-surface-white border border-surface-container-highest rounded-lg shadow-lg p-4 z-50 text-xs text-on-surface"
+            class="absolute right-0 mt-2 w-72 sm:w-80 bg-surface-white border border-surface-container-highest rounded-lg shadow-lg p-4 z-50 text-xs text-on-surface max-w-[calc(100vw-2rem)]"
           >
             <div class="flex items-center justify-between mb-3 border-b pb-2">
               <span class="font-bold text-primary flex items-center gap-1">

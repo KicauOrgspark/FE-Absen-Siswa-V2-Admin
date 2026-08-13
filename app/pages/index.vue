@@ -208,23 +208,23 @@ const activeFilterCount = computed(() => {
 <template>
   <div class="flex flex-col gap-stack-lg">
     <!-- Welcome Header & Date -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-      <div>
-        <h2 class="font-headline text-headline-lg text-primary md:text-[36px] font-bold mb-1">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4">
+      <div class="min-w-0">
+        <h2 class="font-headline text-[22px] sm:text-headline-lg text-primary md:text-[36px] font-bold mb-1 truncate">
           Selamat Datang, {{ adminName }}
         </h2>
-        <p class="font-body text-body-lg text-secondary">
+        <p class="font-body text-body-md sm:text-body-lg text-secondary">
           Ringkasan presensi harian siswa hari ini.
         </p>
       </div>
-      <div class="flex items-center gap-2 px-4 py-2 bg-surface-white border border-surface-container-highest rounded-md shadow-sm">
-        <span class="material-symbols-outlined text-primary">calendar_today</span>
-        <span class="font-label text-label-lg text-deep-black font-bold">{{ formattedDate }}</span>
+      <div class="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-surface-white border border-surface-container-highest rounded-md shadow-sm shrink-0">
+        <span class="material-symbols-outlined text-primary text-[18px] md:text-[24px]">calendar_today</span>
+        <span class="font-label text-label-md md:text-label-lg text-deep-black font-bold">{{ formattedDate }}</span>
       </div>
     </div>
 
     <!-- Stats Bento Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
       <!-- Stat Card 1 -->
       <BentoStatCard
         title="Total Siswa"
@@ -277,9 +277,9 @@ const activeFilterCount = computed(() => {
       </div>
 
       <!-- Filters Bar -->
-      <div class="p-4 border-b border-surface-container-highest bg-surface-container-lowest flex flex-wrap gap-4 items-end">
-        <!-- Search -->
-        <div class="flex-1 min-w-50">
+      <div class="p-3 md:p-4 border-b border-surface-container-highest bg-surface-container-lowest">
+        <!-- Search (always full width) -->
+        <div class="mb-3">
           <label class="block font-label text-label-sm text-secondary mb-1">Pencarian</label>
           <div class="relative">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[18px]">search</span>
@@ -292,122 +292,127 @@ const activeFilterCount = computed(() => {
           </div>
         </div>
 
-        <!-- Angkatan -->
-        <div class="w-full sm:w-auto">
-          <label class="block font-label text-label-sm text-secondary mb-1">Angkatan</label>
-          <select
-            v-model="selectedYear"
-            class="w-full sm:w-32 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
-          >
-            <option value="Semua">
-              Semua
-            </option>
-            <option value="X">
-              Kelas X
-            </option>
-            <option value="XI">
-              Kelas XI
-            </option>
-            <option value="XII">
-              Kelas XII
-            </option>
-          </select>
-        </div>
-
-        <!-- Jurusan -->
-        <div class="w-full sm:w-auto">
-          <label class="block font-label text-label-sm text-secondary mb-1">Jurusan</label>
-          <select
-            v-model="selectedMajor"
-            class="w-full sm:w-32 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
-          >
-            <option value="Semua">
-              Semua
-            </option>
-            <option value="DKV">
-              DKV
-            </option>
-            <option value="RPL">
-              RPL
-            </option>
-            <option value="TKJ">
-              TKJ
-            </option>
-            <option value="LPB">
-              LPB
-            </option>
-            <option value="TOI">
-              TOI
-            </option>
-          </select>
-        </div>
-
-        <!-- Kelas -->
-        <div class="w-full sm:w-auto">
-          <label class="block font-label text-label-sm text-secondary mb-1">Kelas</label>
-          <select
-            v-model="selectedClass"
-            class="w-full sm:w-36 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
-          >
-            <option value="Semua">
-              Semua
-            </option>
-            <option
-              v-for="c in filteredClasses"
-              :key="c"
-              :value="c"
+        <!-- Filter selects in a responsive grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-3 items-end">
+          <!-- Angkatan -->
+          <div>
+            <label class="block font-label text-label-sm text-secondary mb-1">Angkatan</label>
+            <select
+              v-model="selectedYear"
+              class="w-full h-9 md:h-10 px-2 md:px-3 rounded border border-surface-container-highest text-body-sm md:text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
             >
-              {{ c }}
-            </option>
-          </select>
-        </div>
+              <option value="Semua">
+                Semua
+              </option>
+              <option value="X">
+                Kelas X
+              </option>
+              <option value="XI">
+                Kelas XI
+              </option>
+              <option value="XII">
+                Kelas XII
+              </option>
+            </select>
+          </div>
 
-        <!-- Status -->
-        <div class="w-full sm:w-auto">
-          <label class="block font-label text-label-sm text-secondary mb-1">Status</label>
-          <select
-            v-model="selectedStatus"
-            class="w-full sm:w-36 h-10 px-3 rounded border border-surface-container-highest text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
-          >
-            <option value="Semua">
-              Semua
-            </option>
-            <option value="Belum Absen">
-              Belum Absen
-            </option>
-            <option value="Hadir">
-              Hadir
-            </option>
-            <option value="Telat">
-              Telat
-            </option>
-            <option value="Izin">
-              Izin
-            </option>
-            <option value="Sakit">
-              Sakit
-            </option>
-            <option value="PKL">
-              PKL
-            </option>
-            <option value="Alpa">
-              Alpa
-            </option>
-          </select>
-        </div>
+          <!-- Jurusan -->
+          <div>
+            <label class="block font-label text-label-sm text-secondary mb-1">Jurusan</label>
+            <select
+              v-model="selectedMajor"
+              class="w-full h-9 md:h-10 px-2 md:px-3 rounded border border-surface-container-highest text-body-sm md:text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
+            >
+              <option value="Semua">
+                Semua
+              </option>
+              <option value="DKV">
+                DKV
+              </option>
+              <option value="RPL">
+                RPL
+              </option>
+              <option value="TKJ">
+                TKJ
+              </option>
+              <option value="LPB">
+                LPB
+              </option>
+              <option value="TOI">
+                TOI
+              </option>
+            </select>
+          </div>
 
-        <!-- Reset Button -->
-        <button
-          class="h-10 px-4 rounded text-secondary hover:text-primary hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2 border border-transparent font-label text-sm"
-          @click="resetFilters"
-        >
-          <span class="material-symbols-outlined text-[18px]">refresh</span>
-          Reset
-        </button>
+          <!-- Kelas -->
+          <div>
+            <label class="block font-label text-label-sm text-secondary mb-1">Kelas</label>
+            <select
+              v-model="selectedClass"
+              class="w-full h-9 md:h-10 px-2 md:px-3 rounded border border-surface-container-highest text-body-sm md:text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
+            >
+              <option value="Semua">
+                Semua
+              </option>
+              <option
+                v-for="c in filteredClasses"
+                :key="c"
+                :value="c"
+              >
+                {{ c }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Status -->
+          <div>
+            <label class="block font-label text-label-sm text-secondary mb-1">Status</label>
+            <select
+              v-model="selectedStatus"
+              class="w-full h-9 md:h-10 px-2 md:px-3 rounded border border-surface-container-highest text-body-sm md:text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary bg-surface-white"
+            >
+              <option value="Semua">
+                Semua
+              </option>
+              <option value="Belum Absen">
+                Belum Absen
+              </option>
+              <option value="Hadir">
+                Hadir
+              </option>
+              <option value="Telat">
+                Telat
+              </option>
+              <option value="Izin">
+                Izin
+              </option>
+              <option value="Sakit">
+                Sakit
+              </option>
+              <option value="PKL">
+                PKL
+              </option>
+              <option value="Alpa">
+                Alpa
+              </option>
+            </select>
+          </div>
+
+          <!-- Reset Button -->
+          <div class="col-span-2 sm:col-span-1 flex">
+            <button
+              class="h-9 md:h-10 px-4 w-full sm:w-auto rounded text-secondary hover:text-primary hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2 border border-surface-container-highest sm:border-transparent font-label text-sm"
+              @click="resetFilters"
+            >
+              <span class="material-symbols-outlined text-[18px]">refresh</span>
+              Reset
+            </button>
+          </div>
+        </div>
       </div>
 
-      <!-- Data Table -->
-      <div class="overflow-x-auto">
+      <!-- Data Table (Desktop) -->
+      <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-surface-container-highest text-secondary font-label text-[11px] uppercase tracking-wider">
@@ -500,11 +505,63 @@ const activeFilterCount = computed(() => {
         </table>
       </div>
 
+      <!-- Mobile Card List -->
+      <div class="md:hidden divide-y divide-surface-container-highest">
+        <div
+          v-for="student in paginatedStudents"
+          :key="'m-' + student.id"
+          class="px-3 py-3 flex flex-col gap-2 active:bg-surface-container-low transition-colors"
+        >
+          <!-- Row 1: Avatar + Name + Status -->
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full bg-surface-container-highest flex items-center justify-center text-deep-black font-bold text-xs shrink-0">
+              {{ student.avatarInitials }}
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="font-bold text-sm text-deep-black truncate">{{ student.name }}</p>
+              <p class="text-[11px] text-secondary font-mono">{{ student.nisn }}</p>
+            </div>
+            <StatusBadge :status="student.status" />
+          </div>
+          <!-- Row 2: Class + Time -->
+          <div class="flex items-center justify-between ml-12">
+            <div class="flex items-center gap-2 text-xs text-secondary">
+              <span class="bg-surface-container-highest px-2 py-0.5 rounded text-[11px] font-bold">{{ student.class }}</span>
+              <span v-if="student.time && student.time !== '-'" class="flex items-center gap-0.5">
+                <span class="material-symbols-outlined text-[13px]">schedule</span>
+                {{ student.time }}
+              </span>
+            </div>
+            <!-- Row 3: Action buttons -->
+            <QuickActionButtons
+              :current-status="student.status"
+              @update-status="(status) => handleStatusChange(student.id, status, student.name)"
+            />
+          </div>
+        </div>
+        <!-- Empty State -->
+        <div v-if="!paginatedStudents.length" class="p-8 text-center text-secondary">
+          <div class="flex flex-col items-center gap-2">
+            <span class="material-symbols-outlined text-[36px] text-secondary/40">search_off</span>
+            <span class="font-medium text-sm text-on-surface">Tidak ada data siswa</span>
+            <span class="text-xs">Tidak ada data yang cocok dengan filter.</span>
+            <button
+              v-if="isFiltered"
+              class="mt-2 px-3 py-1.5 text-xs font-label font-bold text-primary hover:bg-primary/10 rounded transition-colors flex items-center gap-1"
+              @click="resetFilters"
+            >
+              <span class="material-symbols-outlined text-[16px]">refresh</span>
+              Reset Filter
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Pagination Footer -->
-      <div class="p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-4 text-body-md text-secondary">
-        <div class="flex flex-wrap items-center gap-4">
-          <span>
-            Menampilkan {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }} siswa
+      <div class="p-3 md:p-4 border-t border-surface-container-highest flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-4 text-body-sm md:text-body-md text-secondary">
+        <div class="flex flex-wrap items-center gap-2 md:gap-4 justify-center sm:justify-start w-full sm:w-auto">
+          <span class="text-xs md:text-sm">
+            {{ paginatedStudents.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }}-{{ Math.min(currentPage * itemsPerPage, filteredStudents.length) }} dari {{ filteredStudents.length }}
           </span>
           <div class="flex items-center gap-2">
             <span class="text-xs font-label">Tampilkan:</span>
@@ -519,7 +576,7 @@ const activeFilterCount = computed(() => {
                 25
               </option>
               <option :value="50">
-                50 (Default)
+                50
               </option>
             </select>
           </div>

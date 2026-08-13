@@ -274,14 +274,34 @@ export const useAttendance = () => {
     let status = 'Belum Absen'
     let time = '-'
 
-    if (item.attendance_status || item.presensi_status || item.attendanceStatus) {
-      status = normalizeStatus(String(item.attendance_status || item.presensi_status || item.attendanceStatus))
+    // Detect attendance status from various possible field names
+    // API returns `status: "hadir"` and `clock_in_time: "06:36:21"`
+    const attendanceKeywords = ['hadir', 'telat', 'terlambat', 'sakit', 'izin', 'alpa', 'alfa', 'belum_absen', 'belum absen', 'pkl']
+    const rawItemStatus = item.status ? String(item.status).toLowerCase().trim() : ''
+    const isStatusAttendance = attendanceKeywords.includes(rawItemStatus)
+
+    const rawAttStatus = item.attendance_status || item.presensi_status || item.attendanceStatus
+      || (isStatusAttendance ? item.status : null)
+
+    if (rawAttStatus || item.clock_in_time) {
+      if (rawAttStatus) {
+        status = normalizeStatus(String(rawAttStatus))
+      } else if (item.clock_in_time) {
+        // Has clock_in_time but no explicit status → student has attended
+        status = 'Hadir'
+      }
       const rawTime = String(item.time || item.clock_in_time || item.created_at || '-')
-      if (rawTime && rawTime !== '-' && (rawTime.includes('T') || rawTime.includes(' '))) {
-        const timePart = rawTime.split(/[T ]/)[1]
-        time = timePart ? timePart.substring(0, 5) : rawTime
-      } else {
-        time = rawTime
+      if (rawTime && rawTime !== '-') {
+        if (rawTime.includes('T') || rawTime.includes(' ')) {
+          // Datetime format: "2026-08-13T06:36:21" or "2026-08-13 06:36:21"
+          const timePart = rawTime.split(/[T ]/)[1]
+          time = timePart ? timePart.substring(0, 5) : rawTime
+        } else if (rawTime.includes(':')) {
+          // Pure time format: "06:36:21" → "06:36"
+          time = rawTime.substring(0, 5)
+        } else {
+          time = rawTime
+        }
       }
     }
 
@@ -298,7 +318,8 @@ export const useAttendance = () => {
       grade: String(item.angkatan || item.grade || getGradeFromClass(cls)),
       time,
       status,
-      activeStatus: normalizeActiveStatus(item.active_status ?? item.status_keaktifan ?? item.status),
+      // Don't use item.status for activeStatus when it contains attendance values
+      activeStatus: normalizeActiveStatus(item.active_status ?? item.status_keaktifan ?? (isStatusAttendance ? undefined : item.status)),
       alpaCount: Number(item.alpa_count || item.total_alfa || 0),
       avatarInitials: getInitials(String(item.full_name || item.name || ''))
     }
@@ -421,7 +442,8 @@ export const useAttendance = () => {
     isFetching.value = true
     const page = params.page || 1
     const limit = params.limit || 50
-    
+
+
     let apiStatus = params.status && params.status !== 'Semua' ? params.status : undefined
     if (apiStatus) {
       if (apiStatus.toUpperCase() === 'NON AKTIF') {

@@ -62,6 +62,15 @@
   --spacing-stack-lg: 2rem;
 }
 
+/* Mobile responsive spacing */
+@media (max-width: 767px) {
+  :root {
+    --spacing-margin-page: 1rem;
+    --spacing-gutter-grid: 1rem;
+    --spacing-stack-lg: 1.25rem;
+  }
+}
+
 /* Material Symbols Rules */
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';

@@ -15,10 +15,10 @@ const isAlpa = computed(() => props.currentStatus?.toLowerCase() === 'alpa' || p
 </script>
 
 <template>
-  <div class="flex items-center justify-center gap-1.5">
+  <div class="flex items-center justify-center gap-1">
     <!-- Hadir (H) -->
     <button
-      class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
+      class="w-7 h-7 md:w-8 md:h-8 rounded-full font-bold text-[10px] md:text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
         isHadir
           ? 'bg-[#00875a] text-white shadow-sm'
@@ -32,7 +32,7 @@ const isAlpa = computed(() => props.currentStatus?.toLowerCase() === 'alpa' || p
 
     <!-- Telat (T) -->
     <button
-      class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
+      class="w-7 h-7 md:w-8 md:h-8 rounded-full font-bold text-[10px] md:text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
         isTelat
           ? 'bg-orange-600 text-white shadow-sm'
@@ -46,7 +46,7 @@ const isAlpa = computed(() => props.currentStatus?.toLowerCase() === 'alpa' || p
 
     <!-- Izin (I) -->
     <button
-      class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
+      class="w-7 h-7 md:w-8 md:h-8 rounded-full font-bold text-[10px] md:text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
         isIzin
           ? 'bg-amber-600 text-white shadow-sm'
@@ -60,7 +60,7 @@ const isAlpa = computed(() => props.currentStatus?.toLowerCase() === 'alpa' || p
 
     <!-- Sakit (S) -->
     <button
-      class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
+      class="w-7 h-7 md:w-8 md:h-8 rounded-full font-bold text-[10px] md:text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
         isSakit
           ? 'bg-secondary text-white shadow-sm'
@@ -74,7 +74,7 @@ const isAlpa = computed(() => props.currentStatus?.toLowerCase() === 'alpa' || p
 
     <!-- Alpa (A) -->
     <button
-      class="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
+      class="w-7 h-7 md:w-8 md:h-8 rounded-full font-bold text-[10px] md:text-xs flex items-center justify-center transition-all duration-200 active:scale-90"
       :class="[
         isAlpa
           ? 'bg-[#de350b] text-white shadow-sm'

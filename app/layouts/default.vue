@@ -27,7 +27,7 @@ const getPageTitle = computed(() => {
     <SidebarNav />
 
     <!-- Main Workspace Container -->
-    <main class="grow flex flex-col min-w-0 h-screen overflow-y-auto">
+    <main class="grow flex flex-col min-w-0 h-screen overflow-y-auto overflow-x-hidden">
       <TopAppBar :page-title="getPageTitle" />
       <div class="p-margin-page max-w-container-max-width mx-auto w-full grow flex flex-col gap-stack-lg">
         <slot />
