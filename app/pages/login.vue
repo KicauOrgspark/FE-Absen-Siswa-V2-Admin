@@ -84,7 +84,7 @@ async function handleLogin() {
                 class="block text-xs font-bold text-on-surface mb-1.5 uppercase tracking-wider"
                 for="identifier"
               >
-                Username / NISN / Email
+                Username / NISN
               </label>
               <div class="relative">
                 <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary/60 pointer-events-none text-[20px]">
@@ -95,7 +95,7 @@ async function handleLogin() {
                   v-model="identifier"
                   class="w-full pl-11 pr-4 py-3 bg-surface-white border border-surface-container-highest rounded-xl font-medium text-sm text-on-surface placeholder:text-secondary/40 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
                   name="identifier"
-                  placeholder="Masukkan Username / NISN / Email"
+                  placeholder="Masukkan Username / NIS"
                   required
                   type="text"
                 >
@@ -170,7 +170,7 @@ async function handleLogin() {
         </p>
         <p class="font-semibold text-[11px] text-secondary/80 tracking-wider uppercase flex flex-wrap items-center justify-center gap-1.5">
           <span>POWERED BY</span>
-          <span class="font-extrabold text-[#005321] tracking-wide">DEVACTO IT RPL</span>
+          <span class="font-extrabold text-[#005321] tracking-wide">DEVACCTO IT RPL</span>
           <span class="inline-block w-1 h-1 rounded-full bg-secondary/40" />
           <span>DEV BY</span>
           <span class="font-extrabold text-primary tracking-wide">KICAU_orgspark</span>
