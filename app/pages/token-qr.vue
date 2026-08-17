@@ -2,7 +2,24 @@
 import QRCode from 'qrcode'
 
 const { fetchApi } = useApi()
-const { showSuccess } = useAppToast()
+const { showSuccess, showError } = useAppToast()
+const { user } = useAuth()
+
+const isSuperAdmin = computed(() => String(user.value?.role || '').toLowerCase() === 'superadmin')
+
+const todayLocal = () => {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+const updateForm = reactive({
+  date: todayLocal(),
+  from_until: '',
+  late_after: '',
+  valid_until: ''
+})
+const isUpdating = ref(false)
 
 const isLoading = ref(false)
 const qrCanvasRef = ref<HTMLCanvasElement | null>(null)
@@ -111,6 +128,41 @@ const handleDownloadQR = () => {
   link.download = `QR-Presensi-${activeToken.value.token_code}.png`
   link.href = canvas.toDataURL('image/png')
   link.click()
+}
+
+const handleUpdateQR = async () => {
+  if (!activeToken.value?.id) {
+    showError('Tidak ada token aktif yang dapat diperbarui.')
+    return
+  }
+  if (!updateForm.date || !updateForm.from_until || !updateForm.late_after || !updateForm.valid_until) {
+    showError('Semua field (tanggal & waktu) wajib diisi.')
+    return
+  }
+  const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/
+  if (!timeRegex.test(updateForm.from_until) || !timeRegex.test(updateForm.late_after) || !timeRegex.test(updateForm.valid_until)) {
+    showError('Format waktu harus HH:MM (contoh: 05:00).')
+    return
+  }
+
+  isUpdating.value = true
+  const { error } = await fetchApi(`/api/v1/token/${activeToken.value.id}/updatedadmin`, {
+    method: 'POST',
+    body: { ...updateForm }
+  })
+  isUpdating.value = false
+
+  if (!error) {
+    showSuccess('QR Code berhasil diperbarui. Memuat ulang token dari server...')
+    updateForm.date = todayLocal()
+    updateForm.from_until = ''
+    updateForm.late_after = ''
+    updateForm.valid_until = ''
+    await fetchActiveTokenFromServer()
+    await fetchTokensList()
+  } else {
+    showError(error.message || 'Gagal memperbarui QR Code token.')
+  }
 }
 
 const POLL_INTERVAL = 30_000
@@ -274,6 +326,81 @@ onUnmounted(() => {
           </div>
         </div>
       </template>
+    </div>
+
+    <!-- Superadmin: Update QR Code -->
+    <div
+      v-if="isSuperAdmin"
+      class="bg-surface-white border border-surface-container-highest rounded-2xl p-6 md:p-8 shadow-sm"
+    >
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <h3 class="font-title text-base font-bold text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-lg">qr_code_2</span> Update QR Code Token
+        </h3>
+        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-700 border border-purple-500/20 uppercase tracking-wider">
+          Superadmin Only
+        </span>
+      </div>
+      <p class="font-body text-xs text-secondary mb-5 leading-relaxed">
+        Perbarui jadwal &amp; masa berlaku token QR aktif (ID:
+        <code class="px-1.5 py-0.5 bg-surface-container rounded font-mono text-primary">{{ activeToken?.id || '-' }}</code>).
+        Perubahan langsung diterapkan ke server.
+      </p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-secondary mb-1.5">Tanggal</label>
+          <input
+            v-model="updateForm.date"
+            type="date"
+            class="w-full px-3 py-2.5 border border-surface-container-highest rounded-xl bg-surface-white text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-secondary mb-1.5">Waktu Mulai (from_until)</label>
+          <input
+            v-model="updateForm.from_until"
+            type="time"
+            class="w-full px-3 py-2.5 border border-surface-container-highest rounded-xl bg-surface-white text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-secondary mb-1.5">Batas Telat (late_after)</label>
+          <input
+            v-model="updateForm.late_after"
+            type="time"
+            class="w-full px-3 py-2.5 border border-surface-container-highest rounded-xl bg-surface-white text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-secondary mb-1.5">Berlaku Sampai (valid_until)</label>
+          <input
+            v-model="updateForm.valid_until"
+            type="time"
+            class="w-full px-3 py-2.5 border border-surface-container-highest rounded-xl bg-surface-white text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+        </div>
+      </div>
+
+      <div class="mt-5 flex items-center gap-3 flex-wrap">
+        <button
+          class="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl font-bold font-label text-sm shadow-md hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="isUpdating || !activeToken"
+          @click="handleUpdateQR"
+        >
+          <span
+            class="material-symbols-outlined text-[18px]"
+            :class="{ 'animate-spin': isUpdating }"
+          >{{ isUpdating ? 'progress_activity' : 'qr_code_2' }}</span>
+          {{ isUpdating ? 'Memperbarui...' : 'Update QR Code' }}
+        </button>
+        <span
+          v-if="!activeToken"
+          class="text-xs text-secondary font-medium"
+        >
+          Menunggu token aktif dari server untuk mengaktifkan tombol update.
+        </span>
+      </div>
     </div>
 
     <!-- History / Recent Tokens Table from Server -->
