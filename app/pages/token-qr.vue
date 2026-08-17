@@ -20,6 +20,20 @@ const updateForm = reactive({
   valid_until: ''
 })
 const isUpdating = ref(false)
+const updateTargetId = ref<number | string | null>(null)
+const selectedToken = ref<Record<string, unknown> | null>(null)
+const tokenSearch = ref('')
+const tokenStatusFilter = ref<'all' | 'active' | 'expired'>('all')
+
+const filteredTokens = computed(() => {
+  const keyword = tokenSearch.value.trim().toLowerCase()
+  return tokenList.value.filter((tok) => {
+    const matchesSearch = !keyword || String(tok.token_code || tok.token || '').toLowerCase().includes(keyword)
+    const status = tok.is_active ? 'active' : 'expired'
+    const matchesStatus = tokenStatusFilter.value === 'all' || status === tokenStatusFilter.value
+    return matchesSearch && matchesStatus
+  })
+})
 
 const isLoading = ref(false)
 const qrCanvasRef = ref<HTMLCanvasElement | null>(null)
@@ -81,6 +95,10 @@ const fetchActiveTokenFromServer = async () => {
   } else if (!newCode) {
     lastRenderedToken.value = ''
   }
+
+  if (!selectedToken.value) {
+    updateTargetId.value = activeToken.value?.id ?? null
+  }
 }
 
 const renderIndustryStandardQR = async () => {
@@ -130,9 +148,10 @@ const handleDownloadQR = () => {
   link.click()
 }
 
-const handleUpdateQR = async () => {
-  if (!activeToken.value?.id) {
-    showError('Tidak ada token aktif yang dapat diperbarui.')
+const handleUpdateQR = async (targetId?: number | string) => {
+  const tokenId = targetId ?? updateTargetId.value ?? activeToken.value?.id
+  if (!tokenId) {
+    showError('Tidak ada token yang dapat diperbarui.')
     return
   }
   if (!updateForm.date || !updateForm.from_until || !updateForm.late_after || !updateForm.valid_until) {
@@ -146,23 +165,41 @@ const handleUpdateQR = async () => {
   }
 
   isUpdating.value = true
-  const { error } = await fetchApi(`/api/v1/token/${activeToken.value.id}/updatedadmin`, {
+  const { error } = await fetchApi(`/api/v1/token/${tokenId}/updatedadmin`, {
     method: 'POST',
     body: { ...updateForm }
   })
   isUpdating.value = false
 
   if (!error) {
-    showSuccess('QR Code berhasil diperbarui. Memuat ulang token dari server...')
+    showSuccess('QR Code token berhasil diperbarui. Memuat ulang token dari server...')
     updateForm.date = todayLocal()
     updateForm.from_until = ''
     updateForm.late_after = ''
     updateForm.valid_until = ''
     await fetchActiveTokenFromServer()
     await fetchTokensList()
+    resetUpdateTarget()
   } else {
     showError(error.message || 'Gagal memperbarui QR Code token.')
   }
+}
+
+const resetUpdateTarget = () => {
+  updateTargetId.value = activeToken.value?.id ?? null
+  selectedToken.value = null
+}
+
+const handleReactivateToken = (tok: Record<string, unknown>) => {
+  const tokId = (tok.id as number | string) || (tok.token_code as string)
+  updateTargetId.value = tokId
+  selectedToken.value = tok
+  updateForm.date = String(tok.date || todayLocal())
+  updateForm.from_until = tok.from_until ? String(tok.from_until).slice(0, 5) : ''
+  updateForm.late_after = tok.late_after ? String(tok.late_after).slice(0, 5) : ''
+  updateForm.valid_until = tok.valid_until ? String(tok.valid_until).slice(0, 5) : ''
+  const section = document.getElementById('update-section')
+  section?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 const POLL_INTERVAL = 30_000
@@ -331,6 +368,7 @@ onUnmounted(() => {
     <!-- Superadmin: Update QR Code -->
     <div
       v-if="isSuperAdmin"
+      id="update-section"
       class="bg-surface-white border border-surface-container-highest rounded-2xl p-6 md:p-8 shadow-sm"
     >
       <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
@@ -342,10 +380,30 @@ onUnmounted(() => {
         </span>
       </div>
       <p class="font-body text-xs text-secondary mb-5 leading-relaxed">
-        Perbarui jadwal &amp; masa berlaku token QR aktif (ID:
-        <code class="px-1.5 py-0.5 bg-surface-container rounded font-mono text-primary">{{ activeToken?.id || '-' }}</code>).
+        Perbarui jadwal &amp; masa berlaku token QR (ID:
+        <code class="px-1.5 py-0.5 bg-surface-container rounded font-mono text-primary">{{ updateTargetId ?? activeToken?.id ?? '-' }}</code>).
         Perubahan langsung diterapkan ke server.
       </p>
+
+      <div
+        v-if="selectedToken && String(selectedToken.id) !== String(activeToken?.id)"
+        class="flex items-center justify-between flex-wrap gap-3 px-4 py-3 mb-5 rounded-xl bg-amber-500/10 border border-amber-500/30"
+      >
+        <div class="flex items-center gap-2 text-xs font-bold text-amber-800">
+          <span class="material-symbols-outlined text-[16px]">history_toggle_off</span>
+          <span>
+            Mengupdate token <code class="px-1.5 py-0.5 bg-white/60 rounded font-mono">{{ String(selectedToken.token_code || selectedToken.token || selectedToken.id) }}</code>
+            ({{ selectedToken.is_active ? 'AKTIF' : 'KEDALUWARSA' }})
+          </span>
+        </div>
+        <button
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-white border border-amber-500/30 text-amber-800 text-xs font-bold hover:bg-amber-500/10 transition-all"
+          @click="resetUpdateTarget"
+        >
+          <span class="material-symbols-outlined text-[14px]">close</span>
+          Batal, kembali ke token aktif
+        </button>
+      </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
@@ -385,8 +443,8 @@ onUnmounted(() => {
       <div class="mt-5 flex items-center gap-3 flex-wrap">
         <button
           class="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl font-bold font-label text-sm shadow-md hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          :disabled="isUpdating || !activeToken"
-          @click="handleUpdateQR"
+          :disabled="isUpdating || !(updateTargetId ?? activeToken?.id)"
+          @click="handleUpdateQR()"
         >
           <span
             class="material-symbols-outlined text-[18px]"
@@ -395,10 +453,10 @@ onUnmounted(() => {
           {{ isUpdating ? 'Memperbarui...' : 'Update QR Code' }}
         </button>
         <span
-          v-if="!activeToken"
+          v-if="!(updateTargetId ?? activeToken?.id)"
           class="text-xs text-secondary font-medium"
         >
-          Menunggu token aktif dari server untuk mengaktifkan tombol update.
+          Menunggu token dari server untuk mengaktifkan tombol update.
         </span>
       </div>
     </div>
@@ -411,6 +469,37 @@ onUnmounted(() => {
       <h3 class="font-title text-base font-bold text-on-surface mb-4 flex items-center gap-2">
         <span class="material-symbols-outlined text-primary text-lg">history</span> Riwayat Token dari Server (Postman/BE)
       </h3>
+      <div
+        v-if="isSuperAdmin"
+        class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4"
+      >
+        <div class="relative flex-1 max-w-sm">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[16px] text-secondary">search</span>
+          <input
+            v-model="tokenSearch"
+            type="text"
+            placeholder="Cari kode token..."
+            class="w-full pl-9 pr-3 py-2 border border-surface-container-highest rounded-xl bg-surface-white text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+        </div>
+        <select
+          v-model="tokenStatusFilter"
+          class="px-3 py-2 border border-surface-container-highest rounded-xl bg-surface-white text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+        >
+          <option value="all">
+            Semua Status
+          </option>
+          <option value="active">
+            AKTIF
+          </option>
+          <option value="expired">
+            KEDALUWARSA
+          </option>
+        </select>
+        <span class="text-xs text-secondary font-medium sm:ml-auto">
+          {{ filteredTokens.length }} token ditemukan
+        </span>
+      </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs">
           <thead>
@@ -427,11 +516,17 @@ onUnmounted(() => {
               <th class="p-3">
                 Dibuat Pada
               </th>
+              <th
+                v-if="isSuperAdmin"
+                class="p-3"
+              >
+                Aksi
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y">
             <tr
-              v-for="tok in tokenList"
+              v-for="tok in filteredTokens"
               :key="String(tok.id || tok.token_code)"
             >
               <td class="p-3 font-mono font-bold text-primary">
@@ -452,6 +547,20 @@ onUnmounted(() => {
               </td>
               <td class="p-3 text-secondary">
                 {{ String(tok.created_at || tok.date || '-') }}
+              </td>
+              <td
+                v-if="isSuperAdmin"
+                class="p-3"
+              >
+                <button
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :class="tok.is_active ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border border-amber-500/20'"
+                  :disabled="isUpdating"
+                  @click="handleReactivateToken(tok)"
+                >
+                  <span class="material-symbols-outlined text-[14px]">sync</span>
+                  {{ tok.is_active ? 'Update' : 'Reaktivasi' }}
+                </button>
               </td>
             </tr>
           </tbody>
