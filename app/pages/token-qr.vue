@@ -123,24 +123,52 @@ const renderIndustryStandardQR = async () => {
   }
 }
 
+const extractTokenList = (data: Record<string, unknown> | null | undefined): Record<string, unknown>[] | null => {
+  if (!data) return null
+  const candidates: unknown[] = [
+    data.tokens,
+    (data.data as Record<string, unknown> | undefined)?.tokens,
+    data.data,
+    data
+  ]
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate as Record<string, unknown>[]
+  }
+  return null
+}
+
 const fetchTokensList = async () => {
-  const PAGE_SIZE = 50
+  const PAGE_SIZE = 100
   const MAX_PAGES = 200
   const all: Record<string, unknown>[] = []
   const seen = new Set<string>()
+  let hasMore = true
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
+  for (let page = 1; page <= MAX_PAGES && hasMore; page++) {
     const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/token', { params: { page, limit: PAGE_SIZE } })
     if (error) break
-    const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
-    if (!list || list.length === 0) break
-    for (const item of list as Record<string, unknown>[]) {
+    const list = extractTokenList(data)
+    if (!list || list.length === 0 || !data) break
+
+    const meta = data.data as Record<string, unknown> | undefined
+    const totalPages = typeof meta?.totalPages === 'number'
+      ? meta.totalPages
+      : typeof meta?.total === 'number' && typeof meta?.limit === 'number'
+        ? Math.ceil(meta.total / meta.limit)
+        : undefined
+
+    for (const item of list) {
       const key = String(item.id ?? item.token_code ?? item.token ?? '')
       if (!key || seen.has(key)) continue
       seen.add(key)
       all.push(item)
     }
-    if (list.length < PAGE_SIZE) break
+
+    if (totalPages !== undefined) {
+      hasMore = page < totalPages
+    } else if (list.length < PAGE_SIZE) {
+      hasMore = false
+    }
   }
 
   if (all.length) {
