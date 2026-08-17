@@ -124,10 +124,27 @@ const renderIndustryStandardQR = async () => {
 }
 
 const fetchTokensList = async () => {
-  const { data } = await fetchApi<Record<string, unknown>>('/api/v1/token', { params: { page: 1, limit: 10 } })
-  const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
-  if (list) {
-    tokenList.value = list as Record<string, unknown>[]
+  const PAGE_SIZE = 50
+  const MAX_PAGES = 200
+  const all: Record<string, unknown>[] = []
+  const seen = new Set<string>()
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, error } = await fetchApi<Record<string, unknown>>('/api/v1/token', { params: { page, limit: PAGE_SIZE } })
+    if (error) break
+    const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null
+    if (!list || list.length === 0) break
+    for (const item of list as Record<string, unknown>[]) {
+      const key = String(item.id ?? item.token_code ?? item.token ?? '')
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      all.push(item)
+    }
+    if (list.length < PAGE_SIZE) break
+  }
+
+  if (all.length) {
+    tokenList.value = all
   }
 }
 
