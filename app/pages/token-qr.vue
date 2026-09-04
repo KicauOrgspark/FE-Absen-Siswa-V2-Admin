@@ -17,7 +17,8 @@ const updateForm = reactive({
   date: todayLocal(),
   from_until: '',
   late_after: '',
-  valid_until: ''
+  valid_until: '',
+  status_pkl: null,
 })
 const isUpdating = ref(false)
 const updateTargetId = ref<number | string | null>(null)
@@ -483,6 +484,18 @@ onUnmounted(() => {
             class="w-full px-3 py-2.5 border border-surface-container-highest rounded-xl bg-surface-white text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
           >
         </div>
+         <div>
+  <label class="flex items-center gap-2 cursor-pointer">
+    <input
+      v-model="updateForm.status_pkl"
+      type="checkbox"
+      class="w-4 h-4 rounded border-surface-container-highest text-primary focus:ring-primary/40"
+    >
+    <span class="text-xs font-bold text-secondary">
+      Status Pkl
+    </span>
+  </label>
+</div>
       </div>
 
       <div class="mt-5 flex items-center gap-3 flex-wrap">
