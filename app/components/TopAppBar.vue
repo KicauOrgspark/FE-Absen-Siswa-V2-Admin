@@ -16,6 +16,8 @@ defineProps<{
 const { fetchApi } = useApi()
 const { user, logout } = useAuth()
 
+const userRole = computed(() => user.value?.role || 'admin')
+
 const isMobileMenuOpen = ref(false)
 const showNotificationToast = ref(false)
 const showProfileMenu = ref(false)
@@ -25,6 +27,22 @@ const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).l
 
 const adminName = computed(() => user.value?.full_name || user.value?.name || user.value?.username || 'Admin Utama')
 const adminRole = computed(() => user.value?.role || 'Administrator')
+
+// Mobile nav items filtered by role
+const mobileNavItems = computed(() => {
+  const allItems = [
+    { label: 'Dashboard', path: '/', icon: 'grid_view' },
+    { label: 'Absensi Harian', path: '/absensi', icon: 'calendar_today' },
+    { label: 'Data Siswa', path: '/siswa', icon: 'group' },
+    { label: 'Laporan', path: '/laporan', icon: 'bar_chart' },
+    { label: 'Settings', path: '/token-qr', icon: 'settings' },
+    { label: 'WhatsApp Bot', path: '/whatsapp-bot', icon: 'chat' }
+  ]
+  if (userRole.value === 'ws') {
+    return allItems.filter(item => ['/absensi', '/laporan'].includes(item.path))
+  }
+  return allItems
+})
 
 const fetchNotifications = async () => {
   const { data } = await fetchApi<Record<string, unknown>>('/api/v1/notifications')
@@ -214,46 +232,13 @@ const markAllAsRead = async () => {
           </div>
           <nav class="flex flex-col gap-2">
             <NuxtLink
-              to="/"
+              v-for="item in mobileNavItems"
+              :key="item.path"
+              :to="item.path"
               class="p-3 rounded-lg hover:bg-surface-container font-label text-sm flex items-center gap-3 text-secondary"
               @click="isMobileMenuOpen = false"
             >
-              <span class="material-symbols-outlined">grid_view</span> Dashboard
-            </NuxtLink>
-            <NuxtLink
-              to="/absensi"
-              class="p-3 rounded-lg hover:bg-surface-container font-label text-sm flex items-center gap-3 text-secondary"
-              @click="isMobileMenuOpen = false"
-            >
-              <span class="material-symbols-outlined">calendar_today</span> Absensi Harian
-            </NuxtLink>
-            <NuxtLink
-              to="/siswa"
-              class="p-3 rounded-lg hover:bg-surface-container font-label text-sm flex items-center gap-3 text-secondary"
-              @click="isMobileMenuOpen = false"
-            >
-              <span class="material-symbols-outlined">group</span> Data Siswa
-            </NuxtLink>
-            <NuxtLink
-              to="/laporan"
-              class="p-3 rounded-lg hover:bg-surface-container font-label text-sm flex items-center gap-3 text-secondary"
-              @click="isMobileMenuOpen = false"
-            >
-              <span class="material-symbols-outlined">bar_chart</span> Laporan
-            </NuxtLink>
-            <NuxtLink
-              to="/token-qr"
-              class="p-3 rounded-lg hover:bg-surface-container font-label text-sm flex items-center gap-3 text-secondary"
-              @click="isMobileMenuOpen = false"
-            >
-              <span class="material-symbols-outlined">settings</span> Settings
-            </NuxtLink>
-            <NuxtLink
-              to="/whatsapp-bot"
-              class="p-3 rounded-lg hover:bg-surface-container font-label text-sm flex items-center gap-3 text-secondary"
-              @click="isMobileMenuOpen = false"
-            >
-              <span class="material-symbols-outlined">chat</span> WhatsApp Bot
+              <span class="material-symbols-outlined">{{ item.icon }}</span> {{ item.label }}
             </NuxtLink>
             <button
               class="p-3 rounded-lg hover:bg-rose-50 font-label text-sm flex items-center gap-3 text-rose-600 font-bold mt-4 border-t pt-4"

@@ -180,7 +180,9 @@ export const useApi = () => {
         }
 
         const hadToken = !!getToken()
-        const isAuthError = hadToken && (status === 401 || status === 403)
+        // 401 = sesi tidak valid / belum login → logout
+        // 403 = forbidden (tidak punya izin) → jangan logout, biarkan halaman tampil error
+        const isAuthError = hadToken && status === 401
 
         if (isAuthError && import.meta.client) {
           tokenCookie.value = null
