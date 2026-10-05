@@ -13,7 +13,7 @@ const {
   updateStudentStatus
 } = useAttendance()
 
-const { user: authUser } = useAuth()
+const { user: authUser, isReadOnly } = useAuth()
 const adminName = computed(() => authUser.value?.full_name || authUser.value?.name || authUser.value?.username || 'Admin')
 
 const searchQuery = ref('')
@@ -186,6 +186,10 @@ const displayStats = computed(() => {
 const { showError, showSuccess } = useAppToast()
 
 const handleStatusChange = async (studentId: string, status: string, studentName: string) => {
+  if (isReadOnly.value) {
+    showError('Akun Anda hanya memiliki akses lihat (read-only).')
+    return
+  }
   const res = await updateStudentStatus(studentId, status)
   if (res.success) {
     showSuccess(`Status ${studentName} berhasil diubah menjadi ${status}`)
@@ -437,7 +441,10 @@ const activeFilterCount = computed(() => {
               <th class="p-4 font-bold">
                 Status Presensi
               </th>
-              <th class="p-4 font-bold text-center">
+              <th
+                v-if="!isReadOnly"
+                class="p-4 font-bold text-center"
+              >
                 Aksi Cepat
               </th>
             </tr>
@@ -474,7 +481,10 @@ const activeFilterCount = computed(() => {
               <td class="p-4">
                 <StatusBadge :status="student.status" />
               </td>
-              <td class="p-4">
+              <td
+                v-if="!isReadOnly"
+                class="p-4"
+              >
                 <QuickActionButtons
                   :current-status="student.status"
                   @update-status="(status) => handleStatusChange(student.id, status, student.name)"
@@ -483,7 +493,7 @@ const activeFilterCount = computed(() => {
             </tr>
             <tr v-if="!paginatedStudents.length">
               <td
-                colspan="7"
+                :colspan="isReadOnly ? 6 : 7"
                 class="p-8 text-center text-secondary"
               >
                 <div class="flex flex-col items-center gap-2">
@@ -534,6 +544,7 @@ const activeFilterCount = computed(() => {
             </div>
             <!-- Row 3: Action buttons -->
             <QuickActionButtons
+              v-if="!isReadOnly"
               :current-status="student.status"
               @update-status="(status) => handleStatusChange(student.id, status, student.name)"
             />

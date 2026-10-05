@@ -14,9 +14,7 @@ defineProps<{
 }>()
 
 const { fetchApi } = useApi()
-const { user, logout } = useAuth()
-
-const userRole = computed(() => user.value?.role || 'admin')
+const { user, logout, isReadOnly } = useAuth()
 
 const isMobileMenuOpen = ref(false)
 const showNotificationToast = ref(false)
@@ -28,7 +26,7 @@ const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).l
 const adminName = computed(() => user.value?.full_name || user.value?.name || user.value?.username || 'Admin Utama')
 const adminRole = computed(() => user.value?.role || 'Administrator')
 
-// Mobile nav items filtered by role
+// Mobile nav items (ws boleh melihat dashboard tanpa aksi ubah data, dan tanpa akses WhatsApp Bot)
 const mobileNavItems = computed(() => {
   const allItems = [
     { label: 'Dashboard', path: '/', icon: 'grid_view' },
@@ -38,10 +36,7 @@ const mobileNavItems = computed(() => {
     { label: 'Settings', path: '/token-qr', icon: 'settings' },
     { label: 'WhatsApp Bot', path: '/whatsapp-bot', icon: 'chat' }
   ]
-  if (userRole.value === 'ws') {
-    return allItems.filter(item => ['/absensi', '/laporan'].includes(item.path))
-  }
-  return allItems
+  return isReadOnly.value ? allItems.filter(item => item.path !== '/whatsapp-bot') : allItems
 })
 
 const fetchNotifications = async () => {
@@ -65,6 +60,7 @@ const triggerNotification = async () => {
 }
 
 const markAllAsRead = async () => {
+  if (isReadOnly.value) return
   await fetchApi('/api/v1/notifications/read-all', { method: 'PUT' })
   notifications.value.forEach((n) => {
     n.is_read = true
@@ -128,7 +124,7 @@ const markAllAsRead = async () => {
                 <span class="material-symbols-outlined text-sm">notifications</span> Notifications ({{ notifications.length }})
               </span>
               <button
-                v-if="notifications.length"
+                v-if="notifications.length && !isReadOnly"
                 class="text-[10px] text-secondary hover:text-primary font-bold"
                 @click="markAllAsRead"
               >
@@ -171,7 +167,7 @@ const markAllAsRead = async () => {
               {{ adminName }}
             </p>
             <p class="font-label text-label-sm text-secondary text-[11px] capitalize">
-              {{ adminRole }}
+              {{ adminRole }}<span v-if="isReadOnly"> · Read-only</span>
             </p>
           </div>
           <div class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs shadow-sm group-hover:bg-primary-dark transition-colors">

@@ -40,6 +40,9 @@ export function useAuth() {
     return false
   })
 
+  // Role ws = read-only: boleh melihat semua dashboard, tidak boleh memanipulasi data
+  const isReadOnly = computed(() => String(user.value?.role || '').toLowerCase() === 'ws')
+
   async function login(identifier: string, pass: string): Promise<{ success: boolean, message?: string }> {
     if (!identifier || !pass) {
       return { success: false, message: 'Username / NISN dan Password wajib diisi!' }
@@ -168,6 +171,7 @@ export function useAuth() {
     token,
     user,
     isAuthenticated,
+    isReadOnly,
     login,
     fetchProfile,
     logout

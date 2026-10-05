@@ -1,10 +1,10 @@
 <script setup lang="ts">
 const route = useRoute()
-const { logout } = useAuth()
+const { logout, isReadOnly } = useAuth()
 
 const isCollapsed = ref(false)
 
-const navItems = [
+const allNavItems = [
   { label: 'Dashboard', path: '/', icon: 'grid_view' },
   { label: 'Absensi Harian', path: '/absensi', icon: 'calendar_today' },
   { label: 'Data Siswa', path: '/siswa', icon: 'group' },
@@ -12,6 +12,11 @@ const navItems = [
   { label: 'Settings', path: '/token-qr', icon: 'settings' },
   { label: 'WhatsApp Bot', path: '/whatsapp-bot', icon: 'chat' }
 ]
+
+// ws tidak punya akses ke halaman WhatsApp Bot
+const navItems = computed(() =>
+  isReadOnly.value ? allNavItems.filter(item => item.path !== '/whatsapp-bot') : allNavItems
+)
 
 const isActive = (path: string) => {
   if (path === '/') return route.path === '/'

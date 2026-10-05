@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { waConfig, saveWATemplate } = useAttendance()
 const { fetchApi } = useApi()
+const { isReadOnly } = useAuth()
 
 const templateText = ref('')
 const saveSuccessToast = ref(false)
@@ -64,10 +65,12 @@ watch(
 const { showError, showSuccess } = useAppToast()
 
 const insertTag = (tag: string) => {
+  if (isReadOnly.value) return
   templateText.value += ` ${tag}`
 }
 
 const handleSaveConfig = async () => {
+  if (isReadOnly.value) return
   saveWATemplate(waConfig.value.activeTab, templateText.value)
   isSaving.value = true
 
@@ -96,6 +99,7 @@ const handleSaveConfig = async () => {
 }
 
 const sendTestMessage = async () => {
+  if (isReadOnly.value) return
   testResultToast.value = 'Mengirim pesan tes...'
   const { status, error } = await fetchApi('/api/v1/notification/test', {
     method: 'POST',
@@ -120,6 +124,7 @@ const sendTestMessage = async () => {
 }
 
 const triggerAutoAlfa = async () => {
+  if (isReadOnly.value) return
   const { status, error } = await fetchApi('/api/v1/notification/trigger', { method: 'POST' })
   if (status === 200 || !error) {
     showSuccess('Proses notifikasi otomatis Alfa berhasil dijalankan!')
@@ -143,7 +148,10 @@ const triggerAutoAlfa = async () => {
         </p>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div
+        v-if="!isReadOnly"
+        class="flex items-center gap-3"
+      >
         <button
           class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-xs hover:bg-emerald-700 transition-colors flex items-center gap-1.5 active:scale-95"
           @click="isTestModalOpen = true"
@@ -191,8 +199,9 @@ const triggerAutoAlfa = async () => {
           </div>
         </div>
         <button
-          class="w-12 h-6 rounded-full transition-colors p-1 flex items-center"
+          class="w-12 h-6 rounded-full transition-colors p-1 flex items-center disabled:cursor-not-allowed disabled:opacity-60"
           :class="waConfig.automationEnabled ? 'bg-primary justify-end' : 'bg-secondary/40 justify-start'"
+          :disabled="isReadOnly"
           @click="waConfig.automationEnabled = !waConfig.automationEnabled"
         >
           <span class="w-4 h-4 rounded-full bg-white shadow-sm block" />
@@ -234,7 +243,10 @@ const triggerAutoAlfa = async () => {
                 Template Pesan (Status: {{ currentTab.toUpperCase() }})
               </span>
             </div>
-            <div class="flex flex-wrap gap-2 items-center">
+            <div
+              v-if="!isReadOnly"
+              class="flex flex-wrap gap-2 items-center"
+            >
               <span class="text-[10px] text-secondary font-bold uppercase mr-1">Klik Tag Insert:</span>
               <button
                 v-for="tag in ['{nama}', '{nisn}', '{kelas}', '{status}']"
@@ -251,6 +263,7 @@ const triggerAutoAlfa = async () => {
           <div class="relative group">
             <textarea
               v-model="templateText"
+              :readonly="isReadOnly"
               class="w-full min-h-40 p-5 bg-surface-white border border-surface-container-highest rounded-2xl text-sm text-on-surface focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none leading-relaxed transition-all"
               placeholder="Tulis template pesan di sini..."
             />
@@ -266,7 +279,10 @@ const triggerAutoAlfa = async () => {
       </div>
 
       <!-- Action Footer -->
-      <div class="mt-8 flex justify-end items-center gap-4">
+      <div
+        v-if="!isReadOnly"
+        class="mt-8 flex justify-end items-center gap-4"
+      >
         <span
           v-if="saveSuccessToast"
           class="text-xs text-[#00875a] font-bold flex items-center gap-1"

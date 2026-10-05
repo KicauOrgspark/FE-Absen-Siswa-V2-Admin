@@ -13,6 +13,8 @@ const {
   resetStudentPassword
 } = useAttendance()
 
+const { isReadOnly } = useAuth()
+
 const searchQuery = ref('')
 const selectedGrade = ref('')
 const selectedMajor = ref('')
@@ -218,6 +220,7 @@ const handleResetPasswordSubmit = async () => {
 
       <div class="flex flex-wrap items-center gap-3">
         <button
+          v-if="!isReadOnly"
           class="bg-primary text-white font-label text-label-lg px-6 py-2.5 rounded hover:bg-primary-container transition-colors flex items-center gap-2 shadow-sm active:scale-95 font-bold"
           @click="openAddModal"
         >
@@ -391,7 +394,10 @@ const handleResetPasswordSubmit = async () => {
               <th class="p-4 font-bold">
                 Status
               </th>
-              <th class="p-4 font-bold text-center">
+              <th
+                v-if="!isReadOnly"
+                class="p-4 font-bold text-center"
+              >
                 Aksi
               </th>
             </tr>
@@ -454,7 +460,10 @@ const handleResetPasswordSubmit = async () => {
                   {{ student.activeStatus }}
                 </span>
               </td>
-              <td class="p-4 text-center">
+              <td
+                v-if="!isReadOnly"
+                class="p-4 text-center"
+              >
                 <div class="inline-flex items-center gap-1">
                   <button
                     class="p-1.5 text-secondary hover:text-primary rounded hover:bg-surface-container-low"
@@ -482,7 +491,7 @@ const handleResetPasswordSubmit = async () => {
             </tr>
             <tr v-if="!students.length">
               <td
-                colspan="6"
+                :colspan="isReadOnly ? 5 : 6"
                 class="p-8 text-center text-secondary"
               >
                 Tidak ada data siswa.
